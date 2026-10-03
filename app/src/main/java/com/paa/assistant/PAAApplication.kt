@@ -40,6 +40,15 @@ class PAAApplication : Application(), Configuration.Provider {
         )
     }
 
+    @Inject
+    lateinit var localLlm: com.paa.assistant.core.ai.LocalLlm
+
+    /** Free the ~3 GB model before Android starts killing apps (it killed PAA for LOW_MEMORY before). */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) localLlm.releaseIfIdle()
+    }
+
     private fun scheduleProactiveJobs() {
         val workManager = WorkManager.getInstance(this)
 

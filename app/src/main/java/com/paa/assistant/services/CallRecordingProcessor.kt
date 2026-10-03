@@ -91,11 +91,22 @@ class CallRecordingProcessor @Inject constructor(
             return@withLock
         }
         for ((uri, name, added) in found) {
+            // Don't compete with a live call (or a nearly empty battery): wait, then go on
+            while (inCall() || lowBattery()) kotlinx.coroutines.delay(60_000)
             process(uri, contactOf(name))
             // Marked done only afterwards: if the app is killed mid-way, the recording is retried next time
             prefs.edit().putLong("last_added", added).apply()
         }
     }
+
+    private fun inCall(): Boolean = context.getSystemService(android.media.AudioManager::class.java).mode.let {
+        it == android.media.AudioManager.MODE_IN_CALL || it == android.media.AudioManager.MODE_IN_COMMUNICATION
+    }
+
+    private fun charging(): Boolean = context.getSystemService(android.os.BatteryManager::class.java).isCharging
+
+    private fun lowBattery(): Boolean = !charging() &&
+        context.getSystemService(android.os.BatteryManager::class.java).getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) in 0..19
 
     private suspend fun process(uri: Uri, contact: String) {
         DetectionLog.init(context)
@@ -123,7 +134,8 @@ class CallRecordingProcessor @Inject constructor(
         val model = VoskEngine(context).loadHindiModel() ?: return ""
         val pcm = decodeToPcm16k(uri)
         if (pcm.isEmpty()) return ""
-        val slices = slicesAtPauses(pcm, PARALLEL)
+        // All cores only while charging; on battery leave room for the rest of the phone
+        val slices = slicesAtPauses(pcm, if (charging()) PARALLEL else 2)
         return kotlinx.coroutines.coroutineScope {
             slices.map { (from, to) ->
                 async(Dispatchers.Default) {

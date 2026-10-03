@@ -70,6 +70,7 @@ class WakeListenerService : Service() {
     private var analyzedUpTo = 0L
     @Volatile private var analyzing = false
     private var analyzerJob: Job? = null
+    private var lastAnalysis = 0L
     /** "Oyee PA, start listening" → everything from this time on is kept until "Oyee PA, bas". */
     private var listenFrom: Long? = null
 
@@ -256,7 +257,11 @@ class WakeListenerService : Service() {
             delay(5_000)
             val fresh = transcript.filter { it.first > analyzedUpTo }
             val chars = fresh.sumOf { it.second.length }
-            if (analyzing || fresh.isEmpty() || (chars < 150 && System.currentTimeMillis() - fresh.first().first < 20_000)) continue
+            // A call already strains this phone: analyse at most once a minute, in bigger pieces
+            // ("Oyee PA" still analyses whatever is left right away)
+            val waited = System.currentTimeMillis() - lastAnalysis
+            if (analyzing || fresh.isEmpty() || waited < 60_000 || (chars < 400 && System.currentTimeMillis() - fresh.first().first < 90_000)) continue
+            lastAnalysis = System.currentTimeMillis()
             analyzeChunk(fresh)
         }
         // Call over: forget everything heard

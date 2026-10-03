@@ -64,6 +64,11 @@ class LocalLlm @Inject constructor(
     /** Session that has already read [chatPromptPrefix]; cloned per message so only the new part is processed. */
     private var prefixSession: LlmInferenceSession? = null
 
+    /** Android is short of memory: drop the model now if it isn't in use (it reloads in ~1 s when needed). */
+    fun releaseIfIdle() {
+        if (mutex.tryLock()) try { closeEngine() } finally { mutex.unlock() }
+    }
+
     private fun closeEngine() {
         runCatching { prefixSession?.close() }
         prefixSession = null
