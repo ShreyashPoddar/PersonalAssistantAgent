@@ -252,6 +252,8 @@ Format:
 Examples:
 Message (sent to Rahul): "ok bro I'll call you by 140 and send the ppt at 315"
 {"tasks": [{"title": "Call Rahul", "when": "by 140", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul a call by 1:40."}, {"title": "Send the ppt to Rahul", "when": "at 315", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul the ppt at 3:15."}], "reason": "", "done": [], "update": []}
+Message (received from Rahul): "call pe baat karte hai"
+{"tasks": [], "reason": "A suggestion to talk, not a task.", "done": [], "update": []}
 Message (received): "Register now for the biggest hackathon of the year! Get 20% off"
 {"tasks": [], "reason": "An advertisement.", "done": [], "update": []}
 Message (sent): "I already submitted it lol"
