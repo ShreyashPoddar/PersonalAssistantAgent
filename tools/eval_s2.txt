@@ -4,3 +4,15 @@ FAIL  suggestion_not_task  (47s)
       unexpected '📌': 📌 Call Aman · no deadline said (AI) — Aman requested a call.
 PASS  group_mention_compact_time  (46s)
 PASS  bare_acceptance  (40s)
+PASS  money_deadline  (47s)
+PASS  burst_then_change  (106s)
+PASS  lab_record  (46s)
+PASS  done_reply_closes  (118s)
+PASS  different_subjects_stay_separate  (87s)
+PASS  internship_other_batch  (28s)
+PASS  hackathon_link_random_group  (46s)
+PASS  own_promise  (46s)
+PASS  chatter_no_task  (28s)
+PASS  parso_alone  (41s)
+
+14/15 passed
