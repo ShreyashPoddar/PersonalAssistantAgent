@@ -1,0 +1,28 @@
+# Git ignore for PAA Android project
+local.properties
+.env
+.env.*
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.jks
+*.keystore
+/models
+
+# Large local artifacts
+*.apk
+*.zip
+/*.png
+/app/build
+.kotlin/

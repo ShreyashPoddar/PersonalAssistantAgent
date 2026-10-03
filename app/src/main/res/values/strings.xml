@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PAA</string>
+    <string name="tile_label">PAA Assistant</string>
+    <string name="accessibility_service_label">PAA Chat Assistant</string>
+    <string name="accessibility_service_description">Passively detects tasks, assignments, hackathons, and call commitments you type or view in WhatsApp so you can schedule them in 1 tap.</string>
+</resources>

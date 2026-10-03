@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: adb can inject a chat message (shell holds DUMP; other apps can't) -->
+        <receiver
+            android:name=".services.DebugInjectReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter><action android:name="com.paa.assistant.DEBUG_INJECT" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>
