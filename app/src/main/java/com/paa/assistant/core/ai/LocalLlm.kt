@@ -61,6 +61,15 @@ class LocalLlm @Inject constructor(
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var engine: LlmInference? = null
+    /** Session that has already read [chatPromptPrefix]; cloned per message so only the new part is processed. */
+    private var prefixSession: LlmInferenceSession? = null
+
+    private fun closeEngine() {
+        runCatching { prefixSession?.close() }
+        prefixSession = null
+        engine?.close()
+        engine = null
+    }
     private var releaseJob: Job? = null
 
     companion object {
@@ -330,7 +339,7 @@ Message (sent): "I already submitted it lol"
                     kotlinx.coroutines.withTimeout(if (ctx.isCall) 2 * INFERENCE_TIMEOUT_MS else INFERENCE_TIMEOUT_MS) {
                         val llm = engine ?: createEngine().also { engine = it }
                         scheduleRelease()
-                        ask(llm, fitPrompt(message.take(1500), ctx) { runCatching { llm.sizeInTokens(it) }.getOrDefault(it.length / 3) })
+                        ask(llm, fitPrompt(message.take(1500), ctx) { runCatching { llm.sizeInTokens(it) }.getOrDefault(it.length / 3) }, prefix = chatPromptPrefix())
                     }
                 }
                 parseVerdict(raw)
@@ -367,7 +376,7 @@ Message (sent): "I already submitted it lol"
         val tmp = File(modelFile.parentFile, "$MODEL_FILE_NAME.part")
         try {
             mutex.withLock {
-                engine?.close(); engine = null
+                closeEngine()
                 tmp.delete()
                 // A broken earlier install (e.g. the .tar.gz copied as-is) only wastes space — remove it first
                 if (!installedModelLooksValid()) modelFile.delete()
@@ -480,14 +489,21 @@ Message (sent): "I already submitted it lol"
      * Greedy decoding (the engine's default session samples at temperature 0.8, which breaks the JSON).
      * Async + cancel: the blocking generateResponse() ignores coroutine timeouts and kept the model busy.
      */
-    private suspend fun ask(llm: LlmInference, prompt: String): String {
+    private suspend fun ask(llm: LlmInference, prompt: String, prefix: String? = null): String {
         val options = LlmInferenceSession.LlmInferenceSessionOptions.builder().setTopK(1).setTemperature(0f).build()
-        val session = LlmInferenceSession.createFromOptions(llm, options)
+        // Same fixed prefix every time: reuse a session that already read it (falls back if cloning fails)
+        val cached = if (prefix != null && prompt.startsWith(prefix)) runCatching {
+            val base = prefixSession ?: LlmInferenceSession.createFromOptions(llm, options)
+                .also { it.addQueryChunk(prefix); prefixSession = it }
+            base.cloneSession()
+        }.onFailure { Log.w(tag, "Prefix cache unavailable: ${it.javaClass.simpleName}") }.getOrNull() else null
+        val session = cached ?: LlmInferenceSession.createFromOptions(llm, options)
+        val query = if (cached != null) prompt.removePrefix(prefix!!) else prompt
         val start = System.currentTimeMillis()
         val tokens = runCatching { session.sizeInTokens(prompt) }.getOrDefault(-1)
         var future: com.google.common.util.concurrent.ListenableFuture<String>? = null
         try {
-            session.addQueryChunk(prompt)
+            session.addQueryChunk(query)
             val f = session.generateResponseAsync().also { future = it }
             return suspendCancellableCoroutine { cont ->
                 cont.invokeOnCancellation { runCatching { session.cancelGenerateResponseAsync() } }
@@ -498,7 +514,7 @@ Message (sent): "I already submitted it lol"
                 }, Runnable::run)
             }
         } finally {
-            lastStats = "prompt $tokens tokens · ${(System.currentTimeMillis() - start) / 1000} s"
+            lastStats = "prompt $tokens tokens${if (cached != null) " (prefix cached)" else ""} · ${(System.currentTimeMillis() - start) / 1000} s"
             Log.i(tag, "Local AI: $lastStats")
             // Closing while native generation still runs can crash: wait (bounded) for it to stop
             withContext(NonCancellable) {
@@ -516,8 +532,7 @@ Message (sent): "I already submitted it lol"
         releaseJob = scope.launch {
             delay(IDLE_RELEASE_MS)
             mutex.withLock {
-                engine?.close()
-                engine = null
+                closeEngine()
             }
         }
     }
