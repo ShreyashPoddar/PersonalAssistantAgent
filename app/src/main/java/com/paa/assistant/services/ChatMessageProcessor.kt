@@ -310,7 +310,7 @@ class ChatMessageProcessor @Inject constructor(
             // Small models sometimes copy a task from the prompt's examples instead of reading the message
             val seen = (listOfNotNull(text, msg.chatName, msg.sender) + conversation).joinToString(" ").lowercase(Locale.ROOT)
             val (copied, real) = verdict.tasks.partition { t ->
-                val said = "${t.title} ${t.reason.orEmpty()}".lowercase(Locale.ROOT)
+                val said = t.title.lowercase(Locale.ROOT)  // title only: the reason text may mention example names harmlessly
                 PROMPT_EXAMPLE_WORDS.any { it in said && it !in seen } ||
                     // ...or from the owner's own past ✓/✗ examples, when none of its words are in this chat
                     learned.any { (_, title) -> title != null && ChatTaskScheduler.isSameTask(title, t.title) } &&
