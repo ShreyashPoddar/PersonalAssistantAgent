@@ -67,6 +67,14 @@ class VoiceOverlayViewModel @Inject constructor(
 
     private val tag = "VoiceOverlayVM"
 
+    /** Last turns of this popup session (non-private only), sent to Gemini as conversation history. */
+    private val turns = ArrayDeque<Pair<String, String>>()
+    private var lastInputPrivate = false
+
+    /** Opened by voice: after each reply, listen again briefly for a follow-up ("no, make it 7"). */
+    var followUpEnabled = false
+    private var inFollowUp = false
+
     private val _uiState = MutableStateFlow(VoiceUiState())
     val uiState: StateFlow<VoiceUiState> = _uiState.asStateFlow()
 
@@ -81,13 +89,13 @@ class VoiceOverlayViewModel @Inject constructor(
         }
     }
 
-    fun startListening() {
+    fun startListening(keepResponse: Boolean = false) {
         speechManager.stopSpeaking()
         _uiState.value = _uiState.value.copy(
             state = AssistantState.LISTENING,
             partialText = "",
             finalUserText = "",
-            responseText = "",
+            responseText = if (keepResponse) _uiState.value.responseText else "",
             errorMessage = ""
         )
         speechManager.startListening()
@@ -154,6 +162,7 @@ class VoiceOverlayViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(partialText = event.text)
             }
             is SpeechEvent.Final -> {
+                inFollowUp = false
                 _uiState.value = _uiState.value.copy(
                     state = AssistantState.PROCESSING,
                     finalUserText = event.text,
@@ -176,6 +185,12 @@ class VoiceOverlayViewModel @Inject constructor(
                     return
                 }
 
+                // Silence after a reply just ends the follow-up window — not an error
+                if (inFollowUp) {
+                    inFollowUp = false
+                    _uiState.value = _uiState.value.copy(state = AssistantState.IDLE, errorMessage = "")
+                    return
+                }
                 if (event.isRecoverable) {
                     _uiState.value = _uiState.value.copy(
                         state = AssistantState.IDLE,
@@ -193,6 +208,7 @@ class VoiceOverlayViewModel @Inject constructor(
 
     /** @param localOnly true for text derived from private chats: never escalate to the cloud. */
     fun processCommand(input: String, localOnly: Boolean = false) {
+        lastInputPrivate = localOnly
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 state = AssistantState.PROCESSING,
@@ -236,7 +252,7 @@ class VoiceOverlayViewModel @Inject constructor(
                     // Gemini first: ~1–2 s. The on-device model takes far longer on this phone and may be
                     // busy with a call recording, so it's only the offline fallback.
                     val geminiResponse = kotlinx.coroutines.withTimeoutOrNull(10_000) {
-                        geminiClient.sendTextQuery(userMessage = input, memoryFacts = memoryFacts, taskContext = combinedContext)
+                        geminiClient.sendTextQuery(userMessage = input, memoryFacts = memoryFacts, taskContext = combinedContext, history = turns.toList())
                     }
                     if (geminiResponse == null || geminiResponse.failed) {
                         val local = localExecutor.interpretWithGemma(input)
@@ -433,10 +449,22 @@ class VoiceOverlayViewModel @Inject constructor(
     }
 
     private fun deliverResponse(text: String) {
+        val asked = _uiState.value.finalUserText
+        if (asked.isNotBlank() && !lastInputPrivate) {
+            turns.addLast(asked to text)
+            while (turns.size > 6) turns.removeFirst()
+        }
         _uiState.value = _uiState.value.copy(
             state = AssistantState.IDLE,
             responseText = text
         )
+        if (followUpEnabled) viewModelScope.launch {
+            kotlinx.coroutines.delay(700)
+            if (_uiState.value.state == AssistantState.IDLE) {
+                inFollowUp = true
+                startListening(keepResponse = true)
+            }
+        }
     }
 
     private fun buildConfirmation(result: LocalParseResult): String {

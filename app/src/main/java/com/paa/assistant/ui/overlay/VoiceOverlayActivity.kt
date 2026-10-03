@@ -110,6 +110,7 @@ class VoiceOverlayActivity : ComponentActivity() {
                 viewModel.processCommand(suggestionText, localOnly = true)
             }
             intent.getBooleanExtra("auto_listen", true) -> {
+                viewModel.followUpEnabled = true
                 checkAndRequestPermissions()
             }
         }

@@ -120,7 +120,9 @@ class GeminiClient @Inject constructor(
     suspend fun sendTextQuery(
         userMessage: String,
         memoryFacts: List<String> = emptyList(),
-        taskContext: String = ""
+        taskContext: String = "",
+        /** Earlier (user, assistant) turns of this conversation, oldest first — so "make it 7" has a referent. */
+        history: List<Pair<String, String>> = emptyList()
     ): GeminiResponse {
         val contextualPrompt = promptTemplates.buildUserPrompt(
             userMessage = userMessage,
@@ -134,7 +136,7 @@ class GeminiClient @Inject constructor(
             try {
                 Log.d(tag, "Attempting text query with model: $modelName")
                 val model = getModel(modelName)
-                return executeChat(model, contextualPrompt)
+                return executeChat(model, contextualPrompt, history)
             } catch (e: Exception) {
                 lastException = e
                 Log.w(tag, "Model '$modelName' failed (attempt ${index + 1}/${candidateModels.size}): ${e.message}")
@@ -148,8 +150,8 @@ class GeminiClient @Inject constructor(
         return GeminiResponse(spokenText = sanitizeErrorMessage(lastException), failed = true)
     }
 
-    private suspend fun executeChat(model: GenerativeModel, prompt: String): GeminiResponse {
-        val chat = model.startChat()
+    private suspend fun executeChat(model: GenerativeModel, prompt: String, history: List<Pair<String, String>> = emptyList()): GeminiResponse {
+        val chat = model.startChat(history.flatMap { (u, a) -> listOf(content("user") { text(u) }, content("model") { text(a) }) })
         val response = chat.sendMessage(prompt)
         val candidate = response.candidates.firstOrNull()
 
