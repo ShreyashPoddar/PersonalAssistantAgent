@@ -49,7 +49,7 @@ data class LlmTask(
  * Telegram content, which must never be sent to Gemini or Tavily.
  *
  * The model file is NOT bundled in the APK. Install it from the app ("Install local AI") or with:
- *   adb push gemma3-1b.task /sdcard/Android/data/com.paa.assistant/files/models/gemma3-1b.task
+ *   adb push <model>.task /sdcard/Android/data/com.paa.assistant/files/models/local_model.task
  *
  * The model loads lazily and is released after [IDLE_RELEASE_MS] of inactivity (~600 MB RAM).
  */

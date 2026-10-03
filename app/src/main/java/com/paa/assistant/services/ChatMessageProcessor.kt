@@ -79,6 +79,11 @@ class ChatMessageProcessor @Inject constructor(
         private val DAY_GROUPS = listOf(
             listOf("kal", "tomorrow"), listOf("aaj", "today", "tonight", "raat"), listOf("parso", "parson", "day after")
         )
+        private val AFFIRMATIVE = Regex(
+            "^(hn|hnn|haan|han|ha|haa|hanji|ji|yes|yep|yeah|ok|okay|k|done|confirm(ed)?|sure|theek hai|thik hai|ho gaya|kar diya|pakka)" +
+                "( (bhai|bro|yaar|ji|sir|done|confirm))*[.!👍 ]*$",
+            RegexOption.IGNORE_CASE
+        )
         private val TIME_WORDS = setOf("before", "by", "till", "until", "tomorrow", "today", "tonight", "pm", "am", "kal", "aaj", "baje", "tak", "pehle", "deadline")
     }
 
@@ -286,7 +291,14 @@ class ChatMessageProcessor @Inject constructor(
             }
         }
         // Finished tasks: mark complete and stop their alarms
-        verdict?.done?.mapNotNull { openTasks.getOrNull(it) }?.forEach { t ->
+        val finished = verdict?.done?.mapNotNull { openTasks.getOrNull(it) }.orEmpty().toMutableList()
+        // Safety net the model misses: a short "yes" from the owner answering a question that became a
+        // task in this chat ("10 final na??" → "Hn bhai") settles it
+        if (finished.isEmpty() && msg.outgoing && AFFIRMATIVE.matches(text.trim())) {
+            chatTasks.filter { it.sourceMessage?.contains('?') == true && System.currentTimeMillis() - it.createdAt < 2 * 3_600_000L }
+                .maxByOrNull { it.createdAt }?.let { finished += it }
+        }
+        finished.forEach { t ->
             taskDao.updateStatus(t.id, "COMPLETED")
             com.paa.assistant.core.reminders.ReminderScheduler.cancel(context, t.id)
             com.paa.assistant.core.reminders.ReminderNotifier.showAutoCompleted(context, t.id, t.title, msg.chatName ?: "?")
