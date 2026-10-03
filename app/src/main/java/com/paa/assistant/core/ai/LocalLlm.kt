@@ -219,7 +219,7 @@ class LocalLlm @Inject constructor(
 
     For each task give:
     - "title": the work in 2-7 English words starting with a verb; resolve "it/that" from the conversation. If a person is involved
-      (who asked, who receives it, who you meet or call), name them: "Send notes to Riya", "Call Dadaji back", "Pay Rohit for wifi".
+      (who asked, who receives it, who you meet or call), name them in the pattern "<verb> <thing> to/for <person>" using ONLY names and things from these messages.
     - "when": ALL the words that say when, joined, even from different lines ("kal tak" + "5 baje se pehle" → "kal 5 baje se pehle"),
       e.g. "by 140", "1145", "kal 5 baje", "tonight", "last date aaj"; or null. 140/315/1145 are clock times.
     - ONE task per piece of work. Never list the same work twice with different times or wording.
