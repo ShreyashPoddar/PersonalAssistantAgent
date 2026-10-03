@@ -244,7 +244,7 @@ class SpeechManager @Inject constructor(
 
                 // Android's recognizer can't do en-IN offline here → use the bundled Vosk model instead
                 if (error in OFFLINE_FALLBACK_ERRORS) {
-                    Log.w(tag, "Android recognizer unavailable offline (error $error); switching to bundled Vosk")
+                    Log.i(tag, "Speech engine: Vosk (Android recognizer error $error)")
                     useVosk = true
                     try { recognizer?.destroy() } catch (_: Exception) {}
                     recognizer = null
@@ -360,7 +360,7 @@ class SpeechManager @Inject constructor(
 
             try {
                 recognizer?.startListening(intent)
-                Log.d(tag, "startListening invoked with locale: $targetLang")
+                Log.i(tag, "Speech engine: Android ${if (usingOnDevice) "on-device" else "standard"} ($targetLang)")
             } catch (e: Exception) {
                 Log.e(tag, "startListening failed", e)
                 _speechEvents.trySend(SpeechEvent.Error(0, "Could not start listening: ${e.message}", isRecoverable = true))
@@ -399,7 +399,18 @@ class SpeechManager @Inject constructor(
     /**
      * Speak text using on-device TTS.
      */
+    /** Forget a previous fallback to Vosk, unless Android really has no on-device recognizer. */
+    fun resetEngineChoice() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        ) {
+            useVosk = false
+            onDeviceUnsupported = false
+        }
+    }
+
     fun speak(text: String, onDone: (() -> Unit)? = null) {
+        if (tts == null) initializeTTS()
         if (!ttsReady) {
             Log.w(tag, "TTS not ready yet")
             return

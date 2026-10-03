@@ -337,6 +337,16 @@ class GeminiClient @Inject constructor(
                     ),
                     requiredParameters = listOf("title")
                 ),
+                // Move an existing task to a new time
+                FunctionDeclaration(
+                    name = "reschedule_task",
+                    description = "Change the due time of an EXISTING task (e.g. 'move it to 7', 'shift the github task to tomorrow evening'). Never create a new task for this.",
+                    parameters = listOf(
+                        Schema.str("task_title_hint", "Part of the existing task's title; empty for the task just mentioned"),
+                        Schema.str("new_due_iso", "New due date/time in ISO-8601")
+                    ),
+                    requiredParameters = listOf("new_due_iso")
+                ),
                 // Update task status
                 FunctionDeclaration(
                     name = "update_task_status",
@@ -424,6 +434,7 @@ class GeminiClient @Inject constructor(
                 val title = args?.get("task_title_hint") ?: "that task"
                 "Got it! I've marked '$title' as ${status.toString().lowercase()}."
             }
+            "reschedule_task" -> "Moved it."
             "schedule_calendar_event" -> "I've added '${args?.get("title")}' to your calendar."
             "read_device_file" -> "Looking for '${args?.get("filename_hint")}' in your ${args?.get("directory_hint") ?: "files"}..."
             else -> "Action completed."

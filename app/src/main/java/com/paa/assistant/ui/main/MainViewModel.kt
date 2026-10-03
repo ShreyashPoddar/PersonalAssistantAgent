@@ -299,6 +299,14 @@ class MainViewModel @Inject constructor(
                 )
                 repository.createTask(task)
             }
+            "reschedule_task" -> {
+                val due = toolCall.args.optString("new_due_iso", "").takeIf { it.isNotBlank() }
+                    ?.let { calendarManager.parseIsoToMillis(it) } ?: return "What time should I move it to?"
+                val moved = repository.rescheduleTask(toolCall.args.optString("task_title_hint", "").ifBlank { null }, due)
+                    ?: return "I couldn't find that task to move."
+                return "Moved \"${moved.title}\" to " +
+                    java.text.SimpleDateFormat("h:mm a, MMM d", java.util.Locale.getDefault()).format(java.util.Date(due)) + "."
+            }
             "update_task_status" -> {
                 val taskId = if (toolCall.args.has("task_id")) toolCall.args.optLong("task_id", -1L) else -1L
                 val titleHint = toolCall.args.optString("task_title_hint", "")
