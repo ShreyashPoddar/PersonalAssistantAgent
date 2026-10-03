@@ -72,5 +72,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Microphone foreground services may only start while the app is visible
         com.paa.assistant.services.WakeListenerService.startIfEnabled(this)
+        getSystemService(android.app.NotificationManager::class.java).cancel(7310)
     }
 }

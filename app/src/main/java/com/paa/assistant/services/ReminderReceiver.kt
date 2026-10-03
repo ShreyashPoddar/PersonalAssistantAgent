@@ -49,6 +49,28 @@ class ReminderReceiver : BroadcastReceiver() {
     private fun rescheduleOnBoot(context: Context) {
         val request = androidx.work.OneTimeWorkRequestBuilder<com.paa.assistant.workers.RescheduleAlarmsWorker>().build()
         androidx.work.WorkManager.getInstance(context).enqueue(request)
+        // Android 14+ won't let an app start the microphone from the background at boot:
+        // ask for one tap (opening PAA restarts the "Oyee PA" listener)
+        if (WakeListenerService.isEnabled(context)) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(
+                android.app.NotificationChannel("paa_wake_restore", "\"Oyee PA\" after restart", NotificationManager.IMPORTANCE_LOW)
+            )
+            val open = android.app.PendingIntent.getActivity(
+                context, 7310, Intent(context, com.paa.assistant.ui.main.MainActivity::class.java),
+                android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            nm.notify(
+                7310,
+                androidx.core.app.NotificationCompat.Builder(context, "paa_wake_restore")
+                    .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                    .setContentTitle("Tap to turn \"Oyee PA\" back on")
+                    .setContentText("Android paused it when the phone restarted")
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
     }
 }
 

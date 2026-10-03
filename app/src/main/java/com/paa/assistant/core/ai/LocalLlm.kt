@@ -64,7 +64,9 @@ class LocalLlm @Inject constructor(
     private var releaseJob: Job? = null
 
     companion object {
-        const val MODEL_FILE_NAME = "gemma3-1b.task"
+        const val MODEL_FILE_NAME = "local_model.task"
+        /** Name used before 2026-10-03 (it held Gemma 3n all along); renamed on first use. */
+        private const val OLD_MODEL_FILE_NAME = "gemma3-1b.task"
         private const val IDLE_RELEASE_MS = 5 * 60_000L  // loading is the slow part; keep warm between messages
         private const val INFERENCE_TIMEOUT_MS = 120_000L  // includes a cold model load
         private const val GENERATE_TIMEOUT_MS = 90_000L
@@ -248,7 +250,12 @@ class LocalLlm @Inject constructor(
     }
 
     val modelFile: File
-        get() = File(context.getExternalFilesDir("models"), MODEL_FILE_NAME)
+        get() {
+            val dir = context.getExternalFilesDir("models")
+            val file = File(dir, MODEL_FILE_NAME)
+            File(dir, OLD_MODEL_FILE_NAME).takeIf { !file.exists() && it.exists() }?.renameTo(file)
+            return file
+        }
 
     fun isAvailable(): Boolean = modelFile.exists()
 

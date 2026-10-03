@@ -7,3 +7,5 @@ FAIL  bare_acceptance  (43s)
 PASS  money_deadline  (43s)
 PASS  burst_then_change  (108s)
 PASS  lab_record  (43s)
+FAIL  done_reply_closes  (86s)
+      missing {'contains': '✅ marked done'} in ['📌 Submit final presentation · no deadline said (AI) — Someone asked about your f', 'no task (AI): nothing for you to do']
