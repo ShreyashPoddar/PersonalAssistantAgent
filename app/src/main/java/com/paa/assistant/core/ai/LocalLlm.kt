@@ -189,63 +189,59 @@ class LocalLlm @Inject constructor(
             }
             fun clean(s: String) = s.take(200).replace("\"", "'").replace("\n", " ")
             val history = if (ctx.recentMessages.isEmpty()) "" else
-                "Earlier in this chat (oldest first). Do not create tasks that appear ONLY here, but DO use these lines to fill in " +
-                    "details — the deadline, what 'it' is, who is involved:\n" +
+                "Earlier lines (oldest first):\n" +
                     ctx.recentMessages.takeLast(8).joinToString("\n") { "  ${clean(it)}" } + "\n"
             val learned = if (ctx.learnedExamples.isEmpty()) "" else
-                "The owner has personally judged these messages before — follow the same judgement:\n" +
+                "The owner's own past judgements (follow them):\n" +
                     ctx.learnedExamples.joinToString("\n") { (m, title) ->
                         "  \"${clean(m)}\" → " + (title?.let { "IS a task: $it" } ?: "NOT a task")
                     } + "\n"
             val open = if (ctx.openTasks.isEmpty()) "" else
-                "Open tasks (numbered):\n" + ctx.openTasks.mapIndexed { n, t -> "  ${n + 1}. ${clean(t)}" }.joinToString("\n") +
-                    "\nIf this message shows the owner has ALREADY DONE one of them (confirmed it, sent it, paid, \"done\", \"bhej diya\", " +
-                    "\"ho gaya\", \"hn bhai\" answering that exact question), put its number in \"done\". Only when clearly finished; a promise to do it later is NOT done.\n" +
-                    "If the messages give a NEW or CHANGED deadline or detail for one of them, put it in \"update\" — do NOT create it again as a new task.\n"
+                "Open tasks (done = clearly finished now, e.g. \"ho gaya\", \"bhej diya\", \"hn bhai\" answering it; update = new deadline/detail):\n" +
+                    ctx.openTasks.mapIndexed { n, t -> "  ${n + 1}. ${clean(t)}" }.joinToString("\n") + "\n"
+            return chatPromptPrefix() + """
+Now: $now
+$who
+$history$open$learned
+${if (ctx.burst) "Messages" else "Message"}: "${message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'").let { if (ctx.burst) it else it.replace("\n", " ") }}"
+JSON:"""
+        }
+
+        /**
+         * The fixed part of the chat prompt: identical on every call, so it comes FIRST — the engine can
+         * keep it pre-processed and only read the per-message part (see [LocalLlm.prefixSession]).
+         * Kept short: prompt length is what makes this phone slow.
+         */
+        internal fun chatPromptPrefix(): String {
+            val names = UserProfile.names.joinToString(" or ") { it.replaceFirstChar(Char::uppercase) }
             return """
-    You are the owner's personal assistant. Read the message as a person would — its meaning, who is speaking,
-    and what was said before — and decide which real to-do items it creates for the owner.
-    The owner is called $names and graduates in ${UserProfile.GRADUATION_YEAR}. Messages may be English, Hindi or Hinglish.
-    Current date and time: $now
-    $who
-    $history$open$learned
-    Think about:
-    - Is the OWNER the one who must act? A promise they make ("I'll call you at 5", "kal bhej dunga"), or a request made to them.
-    - Is it real and still pending? Not already done, not a joke, not a suggestion ("call pe baat karte hai" = let's talk, not a task),
-      not someone else's plan, not an ad/newsletter/announcement for everyone.
-    - In a group, a request counts only if it names the owner.
-    - Replies like "haan kar dunga" / "ok will do" accept the request in the conversation above → that request is the task.
-      If there is no conversation above, such a reply alone is NOT a task (you can't know what was accepted).
-    - Never copy tasks from the examples below; they are only about format.
-    - Internship/job posts are tasks only if open to the ${UserProfile.GRADUATION_YEAR} batch or no batch is named.
+You are the personal assistant of $names (graduates ${UserProfile.GRADUATION_YEAR}). Read chat messages (English, Hindi, Hinglish)
+like a person would and list the real to-dos THE OWNER must do. Reply with ONLY JSON.
 
-    For each task give:
-    - "title": the work in 2-7 English words starting with a verb; resolve "it/that" from the conversation. If a person is involved
-      (who asked, who receives it, who you meet or call), name them in the pattern "<verb> <thing> to/for <person>" using ONLY names and things from these messages.
-    - "when": ALL the words that say when, joined, even from different lines ("kal tak" + "5 baje se pehle" → "kal 5 baje se pehle"),
-      e.g. "by 140", "1145", "kal 5 baje", "tonight", "last date aaj"; or null. 140/315/1145 are clock times.
-    - ONE task per piece of work. Never list the same work twice with different times or wording.
-    - "priority": 0-3. "registration": true if registering for a hackathon/event.
-    - "confidence": 0.0-1.0, how sure you are this is a real task for the owner.
-    - "reason": one short sentence a person would understand ("You promised Ahana to submit it today").
-    Reply with ONLY JSON:
-    {"tasks": [{"title": "...", "when": "..." or null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "..."}], "reason": "why there is no task, if tasks is empty", "done": [], "update": [{"n": 1, "when": "new deadline words", "title": "clearer title or null"}]}
+Rules:
+- A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
+- Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
+- "haan kar dunga"/"ok will do" accepts the request above it; with nothing above it is NOT a task.
+- Internship/job posts: only if open to the ${UserProfile.GRADUATION_YEAR} batch or no batch named.
+- Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there.
+- title: 2-7 English words starting with a verb; name the person involved using ONLY names from the messages.
+- when: ALL time words for that task joined, even from different lines ("kal tak" + "5 baje se pehle" = "kal 5 baje se pehle"); else null. 140/315/1145 are clock times.
+- One task per piece of work. confidence 0-1. priority 0-3. registration true only for hackathon/event sign-ups.
+- done: numbers of open tasks the messages show are already finished. update: open tasks whose deadline/details changed (never re-create them).
+- Example words below (Rahul, ppt) are only about the format — never copy them.
 
-    Message (sent to Rahul): "ok bro I'll call you by 140 and send the ppt at 315"
-    {"tasks": [{"title": "Call Rahul", "when": "by 140", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul a call by 1:40."}, {"title": "Send the ppt to Rahul", "when": "at 315", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised to send Rahul the ppt at 3:15."}], "reason": ""}
-    Conversation: "Ahana: But i need to go to senthil first" / Message (sent to Ahana): "I too need to submit it today, last date hai aaj"
-    {"tasks": [{"title": "Submit assignment to Senthil", "when": "last date hai aaj", "priority": 2, "registration": false, "confidence": 0.85, "reason": "You said you must submit it to Senthil today; it's the last date."}], "reason": ""}
-    Message (received from Aman): "call pe baat karte hai"
-    {"tasks": [], "reason": "A suggestion to talk, not something you must do."}
-    Message (received): "Register now for the biggest hackathon of the year! Get 20% off"
-    {"tasks": [], "reason": "An advertisement, not addressed to you."}
-    Message (received in group Flatmates from Rohit): "@Shreyash order groceries and pay the wifi bill"
-    {"tasks": [{"title": "Order groceries", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to order groceries."}, {"title": "Pay the wifi bill", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to pay the wifi bill."}], "reason": ""}
-    Message (sent): "I already submitted it lol"
-    {"tasks": [], "reason": "Already done."}
+Format:
+{"tasks": [{"title": "...", "when": "..." or null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "one short sentence"}], "reason": "why no task, if none", "done": [], "update": [{"n": 1, "when": "...", "title": null}]}
 
-    ${if (ctx.burst) "Messages" else "Message"}: "${message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'").let { if (ctx.burst) it else it.replace("\n", " ") }}"
-    """.trimIndent()
+Examples:
+Message (sent to Rahul): "ok bro I'll call you by 140 and send the ppt at 315"
+{"tasks": [{"title": "Call Rahul", "when": "by 140", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul a call by 1:40."}, {"title": "Send the ppt to Rahul", "when": "at 315", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul the ppt at 3:15."}], "reason": "", "done": [], "update": []}
+Message (received): "Register now for the biggest hackathon of the year! Get 20% off"
+{"tasks": [], "reason": "An advertisement.", "done": [], "update": []}
+Message (sent): "I already submitted it lol"
+{"tasks": [], "reason": "Already done.", "done": [], "update": []}
+
+"""
         }
     }
 

@@ -13,3 +13,8 @@ FAIL  different_subjects_stay_separate  (87s)
       missing {'contains': '📌', 'keyword': 'biology'} in ['ignored "Send biology practical file": copied from the AI\'s examples, not in thi']
 PASS  internship_other_batch  (28s)
 PASS  hackathon_link_random_group  (43s)
+PASS  own_promise  (58s)
+PASS  chatter_no_task  (43s)
+PASS  parso_alone  (48s)
+
+12/15 passed
