@@ -72,8 +72,13 @@ class ChatTaskAccessibilityService : AccessibilityService() {
                 val text = event.text?.joinToString(" ")?.trim().orEmpty()
                 // Box cleared in one go after holding text → the message was sent
                 // (deleting with backspace shrinks it one character at a time instead)
+                // …but only if the text then shows up as a bubble (select-all + delete also clears it)
                 if (text.isEmpty() && draft.length >= 3 && event.beforeText?.length?.let { it >= 2 } != false) {
-                    onSent(draft, app)
+                    val sent = draft
+                    val sentPkg = pkg
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        if (visibleMessages(sentPkg).takeLast(3).any { it == sent.trim() }) onSent(sent, app)
+                    }, 1_500)
                 }
                 draft = text
                 draftPackage = pkg
