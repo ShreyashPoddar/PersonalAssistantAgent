@@ -398,6 +398,44 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         ) {
                             Text("📞 Test call audio (then make a call)", color = textSecondary, fontSize = 12.sp)
                         }
+                        // About the owner: names, batch, groups, alarm window (used by chat detection on the phone)
+                        var editMe by remember { mutableStateOf(false) }
+                        TextButton(onClick = { editMe = true }, contentPadding = PaddingValues(0.dp)) {
+                            Text("⚙️ About me (names, batch, groups, alarm hours)", color = textSecondary, fontSize = 12.sp)
+                        }
+                        if (editMe) {
+                            val up = com.paa.assistant.core.profile.UserProfile
+                            var names by remember { mutableStateOf(up.names.joinToString(", ")) }
+                            var year by remember { mutableStateOf(up.GRADUATION_YEAR.toString()) }
+                            var groups by remember { mutableStateOf(up.hackathonGroups.joinToString(", ")) }
+                            var start by remember { mutableStateOf(up.ALARM_START_HOUR.toString()) }
+                            var end by remember { mutableStateOf(up.ALARM_END_HOUR.toString()) }
+                            var groupMin by remember { mutableStateOf(up.GROUP_REQUEST_DEFAULT_MINUTES.toString()) }
+                            AlertDialog(
+                                onDismissRequest = { editMe = false },
+                                title = { Text("About me") },
+                                text = {
+                                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                                        OutlinedTextField(names, { names = it }, label = { Text("Names people call me (comma-separated)") })
+                                        OutlinedTextField(year, { year = it }, label = { Text("Graduation year") }, singleLine = true)
+                                        OutlinedTextField(groups, { groups = it }, label = { Text("Groups where hackathon talk is for me") })
+                                        OutlinedTextField(start, { start = it }, label = { Text("Alarms may ring from (hour, 0–23)") }, singleLine = true)
+                                        OutlinedTextField(end, { end = it }, label = { Text("…until (hour, 1–24)") }, singleLine = true)
+                                        OutlinedTextField(groupMin, { groupMin = it }, label = { Text("Group request without a time: due in (minutes)") }, singleLine = true)
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        up.save(context, names, year.toIntOrNull() ?: up.GRADUATION_YEAR, groups,
+                                            start.toIntOrNull() ?: up.ALARM_START_HOUR, end.toIntOrNull() ?: up.ALARM_END_HOUR,
+                                            groupMin.toIntOrNull() ?: up.GROUP_REQUEST_DEFAULT_MINUTES)
+                                        editMe = false
+                                    }) { Text("Save") }
+                                },
+                                dismissButton = { TextButton(onClick = { editMe = false }) { Text("Cancel") } }
+                            )
+                        }
+
                         // Details for hackathon registration forms (encrypted, filled only into forms you open)
                         var editProfile by remember { mutableStateOf(false) }
                         TextButton(onClick = { editProfile = true }, contentPadding = PaddingValues(0.dp)) {

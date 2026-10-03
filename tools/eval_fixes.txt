@@ -12,3 +12,6 @@ PASS  internship_other_batch  (28s)
 PASS  hackathon_link_random_group  (46s)
 PASS  own_promise  (59s)
 PASS  chatter_no_task  (28s)
+PASS  parso_alone  (46s)
+
+15/15 passed

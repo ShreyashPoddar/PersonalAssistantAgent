@@ -31,6 +31,7 @@ class PAAApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         com.paa.assistant.services.DetectionLog.init(this)
+        com.paa.assistant.core.profile.UserProfile.init(this)
         scheduleProactiveJobs()
         // Re-apply current alarm rules (e.g. the 7 AM–7 PM ringing window) to all pending tasks
         WorkManager.getInstance(this).enqueueUniqueWork(

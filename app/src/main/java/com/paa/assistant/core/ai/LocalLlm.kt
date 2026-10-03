@@ -63,6 +63,8 @@ class LocalLlm @Inject constructor(
     private var engine: LlmInference? = null
     /** Session that has already read [chatPromptPrefix]; cloned per message so only the new part is processed. */
     private var prefixSession: LlmInferenceSession? = null
+    /** The prefix [prefixSession] read (it changes if the owner edits their names/batch). */
+    private var prefixText: String? = null
 
     /** Android is short of memory: drop the model now if it isn't in use (it reloads in ~1 s when needed). */
     fun releaseIfIdle() {
@@ -498,8 +500,9 @@ Message (sent): "I already submitted it lol"
         val options = LlmInferenceSession.LlmInferenceSessionOptions.builder().setTopK(1).setTemperature(0f).build()
         // Same fixed prefix every time: reuse a session that already read it (falls back if cloning fails)
         val cached = if (prefix != null && prompt.startsWith(prefix)) runCatching {
+            if (prefixText != prefix) { runCatching { prefixSession?.close() }; prefixSession = null }
             val base = prefixSession ?: LlmInferenceSession.createFromOptions(llm, options)
-                .also { it.addQueryChunk(prefix); prefixSession = it }
+                .also { it.addQueryChunk(prefix); prefixSession = it; prefixText = prefix }
             base.cloneSession()
         }.onFailure { Log.w(tag, "Prefix cache unavailable: ${it.javaClass.simpleName}") }.getOrNull() else null
         val session = cached ?: LlmInferenceSession.createFromOptions(llm, options)
