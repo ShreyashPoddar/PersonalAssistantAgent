@@ -20,6 +20,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.paa.assistant.core.audio.VoskEngine
+import com.paa.assistant.core.audio.VoicePrint
 import com.paa.assistant.ui.overlay.VoiceOverlayActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -178,25 +179,62 @@ class WakeListenerService : Service() {
         audio = record
         record.startRecording()
         DetectionLog.add("system", "Oyee PA", "✅ listening")
+        // Voice lock: the owner's voiceprint, checked on the wake word + the next seconds of speech
+        val spk = if (VoicePrint.isOn(this)) VoicePrint.speakerModel(this) else null
+        val ownerPrint = spk?.let { VoicePrint.load(this) }
+        val tail = ShortArray(TAIL_BEFORE)  // ring buffer: last 1.5 s
+        var tailPos = 0
+        var tailFull = false
+        var verifying: ShortArray? = null
+        var verifyFill = 0
         audioThread = Thread {
             val buf = ShortArray(RATE / 10)
             try {
                 while (!Thread.currentThread().isInterrupted) {
                     val n = record.read(buf, 0, buf.size)
                     if (n <= 0) { if (n < 0) break else continue }
+                    for (i in 0 until n) { tail[tailPos] = buf[i]; tailPos = (tailPos + 1) % tail.size; if (tailPos == 0) tailFull = true }
+                    verifying?.let { v ->
+                        val take = minOf(n, v.size - verifyFill)
+                        System.arraycopy(buf, 0, v, verifyFill, take)
+                        verifyFill += take
+                        if (verifyFill == v.size) {
+                            verifying = null
+                            scope.launch { verifyOwner(model, spk!!, ownerPrint!!, v) }
+                        }
+                    }
                     if (n > 0 && buf.take(n).all { it == 0.toShort() }) {
                         if (++silentChunks == 300) DetectionLog.add("system", "Oyee PA", "🔇 microphone gives only silence — another app may be using it")
                     } else silentChunks = 0
                     if (wake.acceptWaveForm(buf, n)) {
                         val json = wake.result
                         val w = words(json)
-                        if (isWake(w)) scope.launch { onWake() }
+                        if (isWake(w)) {
+                            if (ownerPrint == null) scope.launch { onWake() }
+                            else if (verifying == null) {
+                                // Start a check: the 1.5 s before (holds "Oyee PA") + the next 2.5 s
+                                val v = ShortArray(TAIL_BEFORE + TAIL_AFTER)
+                                val before = if (tailFull) tail.copyOfRange(tailPos, tail.size) + tail.copyOfRange(0, tailPos) else tail.copyOfRange(0, tailPos)
+                                System.arraycopy(before, 0, v, 0, before.size)
+                                verifyFill = before.size
+                                verifying = v
+                            }
+                        }
                         else if (w.any { it.first != "[unk]" }) { nearMiss(w); Log.i(TAG, "near miss: " + json.replace(Regex("\\s+"), " ")) }
                     }
                     if (wakeHi != null && wakeHi.acceptWaveForm(buf, n)) {
                         val json = wakeHi.result
                         val w = words(json)
-                        if (isWakeHindi(w)) scope.launch { onWake() }
+                        if (isWakeHindi(w)) {
+                            if (ownerPrint == null) scope.launch { onWake() }
+                            else if (verifying == null) {
+                                val v = ShortArray(TAIL_BEFORE + TAIL_AFTER)
+                                val before = if (tailFull) tail.copyOfRange(tailPos, tail.size) + tail.copyOfRange(0, tailPos) else tail.copyOfRange(0, tailPos)
+                                System.arraycopy(before, 0, v, 0, before.size)
+                                verifyFill = before.size
+                                verifying = v
+                            }
+                        }
                         else if (w.any { it.first != "[unk]" }) { nearMiss(w); Log.i(TAG, "near miss hi: " + json.replace(Regex("\\s+"), " ")) }
                     }
                     if (inCall()) {
@@ -210,6 +248,21 @@ class WakeListenerService : Service() {
                 wake.close(); free.close(); wakeHi?.close()
             }
         }.apply { name = "oyee-pa"; start() }
+    }
+
+    /** Voice lock: act on the wake word only if the voiceprint matches the owner's. */
+    private suspend fun verifyOwner(model: org.vosk.Model, spk: org.vosk.SpeakerModel, owner: FloatArray, pcm: ShortArray) {
+        val result = kotlinx.coroutines.withContext(Dispatchers.Default) { VoicePrint.of(model, spk, pcm) }
+        val (print, frames) = result ?: (null to 0)
+        when {
+            print == null || frames < VoicePrint.MIN_FRAMES ->
+                DetectionLog.add("system", "Oyee PA", "🔐 too little speech to check your voice — say \"Oyee PA\" and keep talking")
+            VoicePrint.similarity(print, owner) >= VoicePrint.THRESHOLD -> {
+                Log.i(TAG, "voice match %.2f".format(VoicePrint.similarity(print, owner)))
+                onWake()
+            }
+            else -> DetectionLog.add("system", "Oyee PA", "🔐 not your voice (match %.2f) — ignored".format(VoicePrint.similarity(print, owner)))
+        }
     }
 
     private fun stopListening() {
@@ -426,6 +479,8 @@ class WakeListenerService : Service() {
         private const val KEY_ENABLED = "wake_listener_enabled"
 
         private const val RATE = 16000
+        private const val TAIL_BEFORE = RATE * 3 / 2
+        private const val TAIL_AFTER = RATE * 5 / 2
 
         /** Hindi wake phrases, plus common look-alikes as decoys so they aren't forced into a match. */
         private const val WAKE_GRAMMAR_HI = "[\"ओये पीए\", \"ओए पीए\", \"ओय पीए\", \"ओ पीए\", \"ओये पी ए\", \"ओए पी ए\", \"ओ पी ए\", \"ओये पा\", \"पीए\", \"पापा\", \"पानी\", \"ओके\", \"ओपन\", \"[unk]\"]"

@@ -1,3 +1,6 @@
 PASS  hinglish_two_tasks  (71s)
 PASS  ad_ignored  (47s)
 PASS  suggestion_not_task  (60s)
+PASS  group_mention_compact_time  (47s)
+PASS  bare_acceptance  (46s)
+PASS  money_deadline  (46s)

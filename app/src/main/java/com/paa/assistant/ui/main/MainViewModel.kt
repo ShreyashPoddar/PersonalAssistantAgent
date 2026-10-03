@@ -51,6 +51,94 @@ class MainViewModel @Inject constructor(
 
     fun aiStats(): String = localLlm.lastStats
 
+    // ── VOICE LOCK ENROLMENT ──────────────────────────────────────────────────
+
+    /** Phrases the owner reads: "Oyee P A" with speech after it, like real use, plus normal sentences. */
+    val enrolPhrases = listOf(
+        "Oyee P A, remind me to call mom at 5",
+        "Oyee P A, kal subah 9 baje class hai",
+        "Oyee P A, what is my next task",
+        "Oyee P A, notes bhej dena yaad dilana",
+        "Mera naam Shreyash hai aur main PAA use karta hoon",
+        "Tomorrow I have to submit the assignment before evening",
+    )
+
+    /** null = not enrolling; else index of the phrase to read (== size: finishing). */
+    private val _enrolStep = MutableStateFlow<Int?>(null)
+    val enrolStep: StateFlow<Int?> = _enrolStep.asStateFlow()
+    private val _enrolStatus = MutableStateFlow("")
+    val enrolStatus: StateFlow<String> = _enrolStatus.asStateFlow()
+    private val enrolPrints = mutableListOf<FloatArray>()
+
+    fun voiceLockOn(): Boolean = com.paa.assistant.core.audio.VoicePrint.isOn(repository.context)
+
+    fun setVoiceLock(on: Boolean) {
+        com.paa.assistant.core.audio.VoicePrint.setOn(repository.context, on)
+        restartWakeListener()
+    }
+
+    fun startEnrolment() {
+        enrolPrints.clear()
+        _enrolStatus.value = "Tap Record, then read the sentence aloud in your normal voice."
+        _enrolStep.value = 0
+        com.paa.assistant.services.WakeListenerService.pauseForPopup(repository.context)  // free the microphone
+    }
+
+    fun cancelEnrolment() {
+        _enrolStep.value = null
+        com.paa.assistant.services.WakeListenerService.resumeAfterPopup(repository.context)
+    }
+
+    /** Records 4 s, turns it into a voiceprint (audio is discarded right away). */
+    @android.annotation.SuppressLint("MissingPermission")
+    fun recordEnrolPhrase() {
+        val step = _enrolStep.value ?: return
+        viewModelScope.launch {
+            _enrolStatus.value = "🎙️ Listening… read it now"
+            val ctx = repository.context
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val model = com.paa.assistant.core.audio.VoskEngine(ctx).loadModel() ?: return@withContext null
+                val spk = com.paa.assistant.core.audio.VoicePrint.speakerModel(ctx) ?: return@withContext null
+                val rate = 16000
+                val pcm = ShortArray(rate * 4)
+                val rec = android.media.AudioRecord(
+                    android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
+                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, rate
+                )
+                try {
+                    rec.startRecording()
+                    var got = 0
+                    while (got < pcm.size) { val n = rec.read(pcm, got, minOf(1600, pcm.size - got)); if (n <= 0) break; got += n }
+                } finally { runCatching { rec.stop() }; rec.release() }
+                com.paa.assistant.core.audio.VoicePrint.of(model, spk, pcm)
+            }
+            val (print, frames) = result ?: (null to 0)
+            if (print == null || frames < com.paa.assistant.core.audio.VoicePrint.MIN_FRAMES) {
+                _enrolStatus.value = "Didn't hear enough — tap Record and read it again, a bit louder."
+                return@launch
+            }
+            enrolPrints += print
+            if (step + 1 < enrolPhrases.size) {
+                _enrolStep.value = step + 1
+                _enrolStatus.value = "✅ Got it (${step + 1}/${enrolPhrases.size}). Next one:"
+            } else {
+                val owner = com.paa.assistant.core.audio.VoicePrint.average(enrolPrints)
+                val selfCheck = enrolPrints.minOf { com.paa.assistant.core.audio.VoicePrint.similarity(it, owner) }
+                com.paa.assistant.core.audio.VoicePrint.save(ctx, owner)
+                _enrolStep.value = null
+                _aiResponse.value = "🔐 Voice lock is on. \"Oyee PA\" now works only for your voice " +
+                    "(your samples matched at %.2f or better; strangers usually score below 0.45).".format(selfCheck)
+                restartWakeListener()
+            }
+        }
+    }
+
+    private fun restartWakeListener() {
+        val ctx = repository.context
+        com.paa.assistant.services.WakeListenerService.stop(ctx)
+        com.paa.assistant.services.WakeListenerService.startIfEnabled(ctx)
+    }
+
     /** This app's memory (PSS), as Android counts it when deciding what to kill. */
     fun memoryMb(): Int = runCatching {
         val am = repository.context.getSystemService(android.app.ActivityManager::class.java)

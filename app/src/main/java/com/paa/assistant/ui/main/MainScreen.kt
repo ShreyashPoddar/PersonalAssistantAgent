@@ -389,6 +389,35 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         ) {
                             Text("📞 Test call audio (then make a call)", color = textSecondary, fontSize = 12.sp)
                         }
+                        // Voice lock: "Oyee PA" only for the owner's voice
+                        var lockOn by remember { mutableStateOf(viewModel.voiceLockOn()) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔐 Only my voice", color = textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { viewModel.startEnrolment() }, contentPadding = PaddingValues(0.dp)) {
+                                Text(if (lockOn) "Re-enrol" else "Enrol my voice", fontSize = 12.sp)
+                            }
+                            if (lockOn) Switch(checked = true, onCheckedChange = { viewModel.setVoiceLock(false); lockOn = false })
+                        }
+                        val enrolStep by viewModel.enrolStep.collectAsStateWithLifecycle()
+                        val enrolStatus by viewModel.enrolStatus.collectAsStateWithLifecycle()
+                        enrolStep?.let { step ->
+                            AlertDialog(
+                                onDismissRequest = { viewModel.cancelEnrolment(); lockOn = viewModel.voiceLockOn() },
+                                title = { Text("Teach PAA your voice (${minOf(step + 1, viewModel.enrolPhrases.size)}/${viewModel.enrolPhrases.size})") },
+                                text = {
+                                    Column {
+                                        Text(enrolStatus, fontSize = 13.sp)
+                                        Spacer(Modifier.height(10.dp))
+                                        Text("\"${viewModel.enrolPhrases.getOrElse(step) { "" }}\"", fontSize = 18.sp)
+                                        Spacer(Modifier.height(6.dp))
+                                        Text("Only a voiceprint is kept, encrypted — never the recording.", fontSize = 11.sp)
+                                    }
+                                },
+                                confirmButton = { TextButton(onClick = { viewModel.recordEnrolPhrase() }) { Text("🎙️ Record (4 s)") } },
+                                dismissButton = { TextButton(onClick = { viewModel.cancelEnrolment() }) { Text("Cancel") } }
+                            )
+                        }
+                        LaunchedEffect(enrolStep) { if (enrolStep == null) lockOn = viewModel.voiceLockOn() }
                         TextButton(onClick = { confirmClearChatTasks = true }, contentPadding = PaddingValues(0.dp)) {
                             Text("🧹 Remove all tasks auto-detected from chats", color = textSecondary, fontSize = 12.sp)
                         }
