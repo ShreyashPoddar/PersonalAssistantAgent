@@ -41,7 +41,8 @@ class ReminderReceiver : BroadcastReceiver() {
                     // "Call me" tasks ring like a phone call at the deadline (inside the ringing window)
                     val called = kind != ReminderScheduler.KIND_EARLY && PaaCallService.TAG_CALL_ME in task.tags &&
                         ReminderScheduler.isRingTime() && PaaCallService.ring(context, taskId, task.title)
-                    if (!called) ReminderNotifier.showReminder(context, taskId, task.title.ifBlank { title }, kind, due)
+                    val registerUrl = if ("#hackathon" in task.tags) com.paa.assistant.core.hackathon.RegisterActivity.linkOf(task.sourceMessage) else null
+                    if (!called) ReminderNotifier.showReminder(context, taskId, task.title.ifBlank { title }, kind, due, registerUrl)
                 }
             } finally {
                 pendingResult.finish()

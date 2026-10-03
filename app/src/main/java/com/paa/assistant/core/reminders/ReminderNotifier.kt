@@ -75,7 +75,8 @@ object ReminderNotifier {
     }
 
     /** The reminder itself: heads-up (EARLY) or alarm-style with repeating sound (DUE). */
-    fun showReminder(context: Context, taskId: Long, title: String, kind: String, due: Long) {
+    /** @param registerUrl hackathon tasks: adds "📝 Register now" (assisted registration in PAA's browser). */
+    fun showReminder(context: Context, taskId: Long, title: String, kind: String, due: Long, registerUrl: String? = null) {
         ensureChannels(context)
         val isCatchUp = kind == ReminderScheduler.KIND_CATCHUP
         val isDue = kind == ReminderScheduler.KIND_DUE || isCatchUp
@@ -117,6 +118,13 @@ object ReminderNotifier {
             .setContentIntent(openApp(context, taskId))
             .addAction(0, "✓ Done", action(context, ACTION_DONE, taskId, title, 1))
             .addAction(0, "⏱ Snooze 10m", action(context, ACTION_SNOOZE, taskId, title, 2))
+        registerUrl?.let { url ->
+            builder.addAction(0, "📝 Register now", PendingIntent.getActivity(
+                context, notificationId(taskId) + 900_000,
+                com.paa.assistant.core.hackathon.RegisterActivity.intent(context, url, taskId),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            ))
+        }
 
         if (quiet) builder.setPriority(NotificationCompat.PRIORITY_LOW).setSilent(true)
         if (isDue && !quiet) {

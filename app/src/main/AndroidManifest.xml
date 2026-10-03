@@ -182,6 +182,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- ====== ASSISTED HACKATHON REGISTRATION (in-app browser + autofill) ====== -->
+        <activity
+            android:name=".core.hackathon.RegisterActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PAA" />
+
         <!-- ====== "PAA CALLS YOU" (self-managed call, no SIM) ====== -->
         <service
             android:name=".services.PaaCallService"

@@ -398,6 +398,39 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         ) {
                             Text("📞 Test call audio (then make a call)", color = textSecondary, fontSize = 12.sp)
                         }
+                        // Details for hackathon registration forms (encrypted, filled only into forms you open)
+                        var editProfile by remember { mutableStateOf(false) }
+                        TextButton(onClick = { editProfile = true }, contentPadding = PaddingValues(0.dp)) {
+                            Text("🧾 Registration profile (for hackathon forms)", color = textSecondary, fontSize = 12.sp)
+                        }
+                        if (editProfile) {
+                            val values = remember {
+                                androidx.compose.runtime.mutableStateMapOf<String, String>().apply {
+                                    putAll(com.paa.assistant.core.hackathon.RegistrationProfile.load(context))
+                                }
+                            }
+                            AlertDialog(
+                                onDismissRequest = { editProfile = false },
+                                title = { Text("Registration profile") },
+                                text = {
+                                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                                        Text("Stored encrypted on this phone. PAA fills these into forms you open and check yourself.", fontSize = 11.sp)
+                                        com.paa.assistant.core.hackathon.RegistrationProfile.FIELDS.forEach { (key, label) ->
+                                            OutlinedTextField(value = values[key] ?: "", onValueChange = { values[key] = it },
+                                                label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        com.paa.assistant.core.hackathon.RegistrationProfile.save(context, values.toMap())
+                                        editProfile = false
+                                    }) { Text("Save") }
+                                },
+                                dismissButton = { TextButton(onClick = { editProfile = false }) { Text("Cancel") } }
+                            )
+                        }
+
                         // Voice lock: "Oyee PA" only for the owner's voice
                         var lockOn by remember { mutableStateOf(viewModel.voiceLockOn()) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
