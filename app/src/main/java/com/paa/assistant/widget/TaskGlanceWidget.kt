@@ -266,13 +266,11 @@ class ToggleTaskAction : ActionCallback {
         parameters: ActionParameters
     ) {
         val taskId = parameters[ActionParameters.Key<Long>("task_id")] ?: return
+        // Through the repository: cancels alarms/geofences, repeating tasks move to their next time
         withContext(Dispatchers.IO) {
-            AppDatabase.getInstance(context).taskDao().updateStatus(taskId, "COMPLETED")
+            dagger.hilt.android.EntryPointAccessors.fromApplication(context, com.paa.assistant.services.RepositoryEntryPoint::class.java)
+                .repository().completeTask(taskId)
         }
-        // Done means no more alarms or reminder notifications for it
-        com.paa.assistant.core.reminders.ReminderScheduler.cancel(context, taskId)
-        context.getSystemService(android.app.NotificationManager::class.java)
-            .cancel(com.paa.assistant.core.reminders.ReminderNotifier.notificationId(taskId))
         TaskGlanceWidget().updateAll(context)
     }
 }

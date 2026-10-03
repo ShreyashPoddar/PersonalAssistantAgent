@@ -27,6 +27,7 @@ class RescheduleAlarmsWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Log.d("RescheduleWorker", "Rescheduling task alarms on boot...")
+            repository.advanceMissedRecurring()
             val pendingTasks = database.taskDao().getUpcomingTasks(100)
             val now = System.currentTimeMillis()
 

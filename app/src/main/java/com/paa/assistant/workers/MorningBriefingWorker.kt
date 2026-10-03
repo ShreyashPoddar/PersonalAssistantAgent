@@ -44,7 +44,7 @@ class MorningBriefingWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val overdue = database.taskDao().getOverdueTasks()
-            val allUpcoming = database.taskDao().getUpcomingTasks(10)
+            val allUpcoming = database.taskDao().getNextTasks(limit = 10)
             // Chat-derived tasks never leave the device; Gemini only learns how many there are
             val upcoming = PrivacyGuard.cloudSafe(allUpcoming)
             val privateCount = allUpcoming.size - upcoming.size
@@ -113,15 +113,6 @@ class MorningBriefingWorker @AssistedInject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val listenIntent = Intent(context, com.paa.assistant.ui.overlay.VoiceOverlayActivity::class.java).apply {
-            putExtra("auto_listen", false)
-            putExtra("speak_text", body)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        val listenPi = PendingIntent.getActivity(
-            context, 9003, listenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
 
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_agenda)
@@ -129,7 +120,6 @@ class MorningBriefingWorker @AssistedInject constructor(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(pi)
-            .addAction(android.R.drawable.ic_btn_speak_now, "🎙️ Listen", listenPi)
             .setAutoCancel(true)
             .build()
 

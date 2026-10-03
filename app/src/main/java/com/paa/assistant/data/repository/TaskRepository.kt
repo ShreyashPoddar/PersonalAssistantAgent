@@ -5,6 +5,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import com.paa.assistant.core.location.GeofenceManager
 import com.paa.assistant.core.reminders.ReminderNotifier
 import com.paa.assistant.core.reminders.ReminderScheduler
+import com.paa.assistant.core.reminders.Recurrence
 import com.paa.assistant.data.db.AppDatabase
 import com.paa.assistant.data.models.MemoryFactEntity
 import com.paa.assistant.data.models.TaskEntity
@@ -57,11 +58,31 @@ class TaskRepository @Inject constructor(
         return id
     }
 
-    suspend fun completeTask(taskId: Long) {
+    /**
+     * Done. A repeating task moves to its next occurrence instead of closing.
+     * @return true if it was a repeating task that moved on.
+     */
+    suspend fun completeTask(taskId: Long): Boolean {
+        val task = taskDao.getById(taskId)
+        val rule = task?.recurrenceRule?.takeIf { it.isNotBlank() }
+        val next = rule?.let { Recurrence.next(it, task.dueTimestamp ?: System.currentTimeMillis()) }
+        if (task != null && next != null) {
+            updateTask(task.copy(dueTimestamp = next))
+            return true
+        }
         taskDao.updateStatus(taskId, "COMPLETED")
         cancelReminder(taskId)
         geofenceManager.removeGeofence(taskId)
         refreshWidget()
+        return false
+    }
+
+    /** Repeating tasks whose deadline passed long ago (never ticked off) move to their next occurrence. */
+    suspend fun advanceMissedRecurring(graceMs: Long = 12 * 3_600_000L) {
+        val now = System.currentTimeMillis()
+        taskDao.getOverdueTasks(now - graceMs).filter { !it.recurrenceRule.isNullOrBlank() }.forEach { t ->
+            Recurrence.next(t.recurrenceRule!!, t.dueTimestamp!!, now)?.let { updateTask(t.copy(dueTimestamp = it)) }
+        }
     }
 
     /** Moves a task to [due]: the one matching [titleHint], else the last one created/changed. */

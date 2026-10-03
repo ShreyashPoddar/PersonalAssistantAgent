@@ -186,15 +186,6 @@
             android:name=".services.SuggestionReceiver"
             android:exported="false" />
 
-        <!-- ====== QUICK SCHEDULE ACTION RECEIVER (1-Tap WhatsApp Scheduling) ====== -->
-        <receiver
-            android:name=".services.QuickScheduleReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.paa.assistant.ACTION_QUICK_SCHEDULE" />
-            </intent-filter>
-        </receiver>
-
         <!-- ====== WHATSAPP CHAT ACCESSIBILITY SERVICE (What YOU Type) ====== -->
         <service
             android:name=".services.ChatTaskAccessibilityService"

@@ -13,8 +13,22 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class DebugInjectReceiver : BroadcastReceiver() {
     @Inject lateinit var processor: ChatMessageProcessor
+    @Inject lateinit var repository: com.paa.assistant.data.repository.TaskRepository
 
     override fun onReceive(context: Context, intent: Intent) {
+        // --ez reset true: clean slate for tools/eval_chats.py (chat tasks, chat memory, ✓/✗ examples, log)
+        if (intent.getBooleanExtra("reset", false)) {
+            CoroutineScope(Dispatchers.IO).launch {
+                repository.deleteAllChatTasks()
+                com.paa.assistant.data.db.AppDatabase.getInstance(context).openHelper.writableDatabase.apply {
+                    execSQL("DELETE FROM chat_history")
+                    execSQL("DELETE FROM task_feedback")
+                }
+                DetectionLog.init(context)
+                DetectionLog.clear()
+            }
+            return
+        }
         val text = intent.getStringExtra("text") ?: return
         // Not goAsync(): the AI takes ~1 min, far beyond the broadcast time limit (→ ANR kill)
         CoroutineScope(Dispatchers.Default).launch {

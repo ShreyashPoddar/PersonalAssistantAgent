@@ -31,9 +31,14 @@ class EveningRetrospectiveWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val pendingTasks = database.taskDao().getUpcomingTasks(10)
+            // Tasks that were due today and are still open
+            val dayStart = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+            }.timeInMillis
+            val pendingTasks = database.taskDao().getDueBetween(dayStart, System.currentTimeMillis())
             if (pendingTasks.isNotEmpty()) {
-                val body = "You have ${pendingTasks.size} pending tasks from today. Tap to review or reschedule them for tomorrow."
+                val body = "${pendingTasks.size} task(s) due today are still open: " +
+                    pendingTasks.take(3).joinToString(", ") { it.title } + ". Tap to review or reschedule them."
                 postNotification("🌙 Evening Retrospective", body)
             }
             Result.success()

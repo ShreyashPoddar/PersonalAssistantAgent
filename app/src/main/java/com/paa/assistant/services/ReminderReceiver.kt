@@ -104,7 +104,9 @@ class ReminderActionReceiver : BroadcastReceiver() {
                                     com.paa.assistant.data.models.TaskFeedbackEntity(message = msg, title = title, isTask = true)
                                 )
                             }
-                            dao.updateStatus(taskId, "COMPLETED")
+                            // Through the repository: removes geofences, moves repeating tasks to their next time
+                            dagger.hilt.android.EntryPointAccessors.fromApplication(context, RepositoryEntryPoint::class.java)
+                                .repository().completeTask(taskId)
                         }
                         try {
                             val manager = androidx.glance.appwidget.GlanceAppWidgetManager(context)
@@ -118,4 +120,11 @@ class ReminderActionReceiver : BroadcastReceiver() {
             }
         }
     }
+}
+
+/** Hilt access from plain BroadcastReceivers. */
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface RepositoryEntryPoint {
+    fun repository(): com.paa.assistant.data.repository.TaskRepository
 }

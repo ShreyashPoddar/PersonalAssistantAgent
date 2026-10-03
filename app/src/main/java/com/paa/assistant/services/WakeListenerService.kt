@@ -350,8 +350,8 @@ class WakeListenerService : Service() {
 
     /** Spoken answer about the owner's own tasks (earpiece only). */
     private suspend fun nextTasksSummary(): String {
-        val tasks = com.paa.assistant.data.db.AppDatabase.getInstance(this).taskDao().getUpcomingTasks(3)
-        if (tasks.isEmpty()) return "You have no pending tasks."
+        val tasks = com.paa.assistant.data.db.AppDatabase.getInstance(this).taskDao().getNextTasks(limit = 3)
+        if (tasks.isEmpty()) return "You have no upcoming tasks."
         val fmt = java.text.SimpleDateFormat("h:mm a", Locale.ENGLISH)
         return "Your next tasks: " + tasks.joinToString("; ") { t ->
             t.title + (t.dueTimestamp?.let { " at " + fmt.format(java.util.Date(it)) } ?: "")

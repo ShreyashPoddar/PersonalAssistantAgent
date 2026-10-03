@@ -407,7 +407,7 @@ class ChatMessageProcessor @Inject constructor(
     private suspend fun learnedExamples(): List<Pair<String, String?>> =
         (feedbackDao.recent(isTask = true, limit = 4).map { it.message to it.title } +
             feedbackDao.recent(isTask = false, limit = 4).map { it.message to null })
-            .shuffled()
+            .take(6)  // stable order (newest first): the same chat gives the same prompt
 
     private fun chatKey(msg: ChatMessage) = "${msg.app}|${msg.chatName ?: msg.sender ?: "?"}"
 
