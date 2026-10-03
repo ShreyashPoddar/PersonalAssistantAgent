@@ -19,7 +19,7 @@ import com.paa.assistant.data.models.TaskFeedbackEntity
  */
 @Database(
     entities = [TaskEntity::class, MemoryFactEntity::class, FileIndexEntity::class, TaskFeedbackEntity::class, com.paa.assistant.data.models.ChatLineEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,6 +57,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v5: chat lines remember whether their burst was read (recovery after the app is killed). */
+        private val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `pending` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `chat_history` ADD COLUMN `isGroup` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -76,7 +84,7 @@ abstract class AppDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(SupportOpenHelperFactory(passphrase.toByteArray()))
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

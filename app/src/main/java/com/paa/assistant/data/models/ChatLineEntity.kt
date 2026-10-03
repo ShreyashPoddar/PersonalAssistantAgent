@@ -13,5 +13,8 @@ data class ChatLineEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val chatKey: String,
     val line: String,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** Saved but its burst not read yet — re-read after a restart (app killed during the 20 s wait). */
+    val pending: Boolean = false,
+    val isGroup: Boolean = false
 )

@@ -118,7 +118,7 @@ class ChatMessageProcessor @Inject constructor(
     suspend fun process(msg: ChatMessage, dryRun: MutableList<Prepared>? = null): Int {
         // Calls and dry runs are already whole; chat messages wait for the rest of their burst
         if (dryRun != null || msg.app == ChatApp.CALL) return processNow(msg, dryRun)
-        remember(msg)  // saved right away, so nothing is lost if the app restarts mid-burst
+        remember(msg, pending = true)  // saved right away, so nothing is lost if the app restarts mid-burst
         val key = chatKey(msg)
         synchronized(bursts) {
             bursts.getOrPut(key) { mutableListOf() } += msg
@@ -127,6 +127,7 @@ class ChatMessageProcessor @Inject constructor(
                 kotlinx.coroutines.delay(BURST_MS)
                 val batch = synchronized(bursts) { burstJobs.remove(key); bursts.remove(key) } ?: return@launch
                 processNow(merge(batch), null, remembered = true)
+                runCatching { historyDao.markRead(key) }
             }
         }
         return 0
@@ -431,12 +432,40 @@ class ChatMessageProcessor @Inject constructor(
     private suspend fun chatHistory(msg: ChatMessage): List<String> =
         runCatching { historyDao.recent(chatKey(msg), HISTORY_PER_CHAT + 10).reversed() }.getOrDefault(emptyList())
 
-    private suspend fun remember(msg: ChatMessage) {
+    private suspend fun remember(msg: ChatMessage, pending: Boolean = false) {
         val key = chatKey(msg)
         val lines = if (msg.burst) msg.text.lines() else listOf("${who(msg)}: ${msg.text.trim().take(200)}")
         runCatching {
-            lines.forEach { historyDao.insert(com.paa.assistant.data.models.ChatLineEntity(chatKey = key, line = it.take(220))) }
+            lines.forEach {
+                historyDao.insert(com.paa.assistant.data.models.ChatLineEntity(chatKey = key, line = it.take(220), pending = pending, isGroup = msg.isGroup))
+            }
             historyDao.trim(key)
+        }
+    }
+
+    init {
+        // Bursts cut short by the app being killed: read them now (recent ones only)
+        burstScope.launch {
+            kotlinx.coroutines.delay(5_000)
+            val lines = runCatching { historyDao.pending() }.getOrDefault(emptyList())
+            for ((key, chatLines) in lines.groupBy { it.chatKey }) {
+                if (synchronized(bursts) { key in bursts }) continue
+                val fresh = chatLines.filter { System.currentTimeMillis() - it.createdAt < 15 * 60_000L }
+                val app = ChatApp.entries.firstOrNull { key.startsWith(it.name + "|") }
+                if (fresh.isNotEmpty() && app != null) {
+                    val chat = key.substringAfter("|").takeIf { it != "?" }
+                    val msgs = fresh.map { l ->
+                        val mine = l.line.startsWith("You: ")
+                        ChatMessage(
+                            text = l.line.substringAfter(": "), app = app, outgoing = mine, chatName = chat,
+                            sender = if (mine) null else l.line.substringBefore(": "), isGroup = l.isGroup
+                        )
+                    }
+                    DetectionLog.add("system", chat ?: "chat", "↻ reading ${msgs.size} message(s) left unread by a restart")
+                    processNow(merge(msgs), null, remembered = true)
+                }
+                runCatching { historyDao.markRead(key) }
+            }
         }
     }
 

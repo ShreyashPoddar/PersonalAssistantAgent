@@ -11,3 +11,5 @@ FAIL  done_reply_closes  (86s)
       missing {'contains': '✅ marked done'} in ['📌 Submit final presentation · no deadline said (AI) — Someone asked about your f', 'no task (AI): nothing for you to do']
 FAIL  different_subjects_stay_separate  (87s)
       missing {'contains': '📌', 'keyword': 'biology'} in ['ignored "Send biology practical file": copied from the AI\'s examples, not in thi']
+PASS  internship_other_batch  (28s)
+PASS  hackathon_link_random_group  (43s)
