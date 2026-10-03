@@ -49,6 +49,14 @@ class MainViewModel @Inject constructor(
     private val _aiResponse = MutableStateFlow<String?>(null)
     val aiResponse: StateFlow<String?> = _aiResponse.asStateFlow()
 
+    fun aiStats(): String = localLlm.lastStats
+
+    /** This app's memory (PSS), as Android counts it when deciding what to kill. */
+    fun memoryMb(): Int = runCatching {
+        val am = repository.context.getSystemService(android.app.ActivityManager::class.java)
+        am.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))[0].totalPss / 1024
+    }.getOrDefault(-1)
+
     fun completeTask(taskId: Long) {
         viewModelScope.launch {
             repository.completeTask(taskId)

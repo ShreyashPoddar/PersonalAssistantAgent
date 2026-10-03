@@ -29,7 +29,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class TaskRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @ApplicationContext val context: Context,
     private val db: AppDatabase,
     private val geofenceManager: GeofenceManager
 ) {

@@ -380,6 +380,8 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                             TextButton(onClick = { viewModel.testLocalAi() }, contentPadding = PaddingValues(0.dp)) {
                                 Text("🔬 Test local AI", color = textSecondary, fontSize = 12.sp)
                             }
+                            // Speed of the last on-device AI run (prompt size and time), to measure improvements
+                            Text("⚙️ Last AI run: ${viewModel.aiStats()} · ${viewModel.memoryMb()} MB used", color = textSecondary, fontSize = 11.sp)
                         }
                         TextButton(
                             onClick = { com.paa.assistant.services.CallAudioProbeService.start(context) },
