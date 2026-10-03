@@ -53,6 +53,7 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         DetectionLog.init(this)
         DetectionLog.add("system", "Notification access", "✅ connected — incoming messages will be read")
         // This service stays bound by Android, so it's the reliable place to watch for call recordings
@@ -61,6 +62,7 @@ class NotificationListener : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        instance = null
         DetectionLog.add("system", "Notification access", "❌ disconnected by Android (battery saver?)")
         super.onListenerDisconnected()
     }
@@ -134,6 +136,11 @@ class NotificationListener : NotificationListenerService() {
             val sender = b.getCharSequence("sender")?.toString() ?: person?.name?.toString()
             Msg(text, sender, b.getLong("time"), fromSelf = b.getCharSequence("sender") == null && person == null)
         }
+    }
+
+    companion object {
+        /** The connected listener, for replying through a chat's notification (WhatsAppSender). */
+        @Volatile var instance: NotificationListener? = null
     }
 
     /** "hackstreet_Boys (3 messages)" → "hackstreet_Boys"; "Group: Rahul" → "Group". */

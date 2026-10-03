@@ -339,6 +339,7 @@ class MainViewModel @Inject constructor(
                 }
             }
             LocalIntent.SAVE_PLACE -> localExecutor.savePlace(result.locationName)
+            LocalIntent.SEND_MESSAGE -> "Say it to the voice assistant (🎙️) — it shows the message so you can confirm before it's sent."
             LocalIntent.UNKNOWN -> "I didn't recognize that command."
         }
     }

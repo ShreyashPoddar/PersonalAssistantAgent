@@ -30,7 +30,9 @@ data class LocalParseResult(
     /** Location-triggered reminder: "home", "office", … (resolved via SavedPlaces). */
     val locationName: String? = null,
     /** 1 = on arrival, 2 = on leaving. */
-    val locationTransition: Int = 1
+    val locationTransition: Int = 1,
+    /** SEND_MESSAGE: who to message (spoken name); the text is in taskTitle. */
+    val recipient: String? = null
 )
 
 enum class LocalIntent {
@@ -43,6 +45,7 @@ enum class LocalIntent {
     PLAN_TASKS,  // "how can I finish everything tonight?" → answered on-device
     SAVE_PLACE,  // "save this location as home"
     RESCHEDULE_TASK,  // "change that reminder to 10 pm", "no no, make it 12" → moves an existing task
+    SEND_MESSAGE,  // "Riya ko bol do ki main late hu", "message Riya that I'm late" → WhatsApp after confirmation
     UNKNOWN  // triggers cloud escalation
 }
 
@@ -103,8 +106,31 @@ class LocalTaskParser @Inject constructor() {
         return cal.timeInMillis
     }
 
+    // "message/text/whatsapp Riya (that) I'm late", "tell Riya that …", "send a message to Riya saying …"
+    private val sendEn = Regex(
+        "^(?:please |pls |can you |could you )?(?:send (?:a )?(?:message|msg|text|whatsapp) to|message|msg|text|whatsapp|tell) " +
+            "([a-z][a-z.]*(?: [a-z][a-z.]*)?) (?:that |saying |to say |:\\s*)(.+)$", RegexOption.IGNORE_CASE
+    )
+    // "Riya ko bol do (ki) main late hu", "Riya ko message karo ki …", "Riya ko bata do …"
+    private val sendHi = Regex(
+        "^([a-z][a-z.]*(?: [a-z][a-z.]*)?) ko (?:bol|bata|keh|kah|message kar|msg kar|whatsapp kar|text kar)(?: do| de| dena| karo|o)? (?:ki |ke )?(.+)$",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** A message to send for the owner, or null. Uses the raw words: the text is sent as the owner said it. */
+    fun parseSendMessage(raw: String): LocalParseResult? {
+        val t = raw.trim().trimEnd('.', '!')
+        val m = sendHi.find(t) ?: sendEn.find(t) ?: return null
+        val who = m.groupValues[1].trim()
+        val text = m.groupValues[2].trim()
+        if (text.length < 2 || who.lowercase() in setOf("me", "mujhe", "myself", "paa")) return null
+        return LocalParseResult(LocalIntent.SEND_MESSAGE, taskTitle = text.replaceFirstChar { it.uppercase() }, recipient = who,
+            confidence = 0.95f, rawInput = raw)
+    }
+
     fun parse(input: String): LocalParseResult {
         val trimmed = input.trim()
+        parseSendMessage(trimmed)?.let { return it }
         val normalized = normalizeInput(trimmed)
 
         return when {

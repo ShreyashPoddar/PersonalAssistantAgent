@@ -39,8 +39,12 @@ data class VoiceUiState(
     val partialText: String = "",           // Live partial speech transcription
     val finalUserText: String = "",         // Finalized user utterance
     val responseText: String = "",          // PAA's response to display
-    val errorMessage: String = ""
+    val errorMessage: String = "",
+    /** A message waiting for the owner's OK: shown with Send / Cancel. */
+    val pendingSend: PendingSend? = null
 )
+
+data class PendingSend(val contact: com.paa.assistant.core.messaging.Contact, val text: String, val alternatives: List<com.paa.assistant.core.messaging.Contact> = emptyList())
 
 /**
  * VoiceOverlayViewModel — the brain behind the voice assistant UI.
@@ -209,6 +213,11 @@ class VoiceOverlayViewModel @Inject constructor(
 
     /** @param localOnly true for text derived from private chats: never escalate to the cloud. */
     fun processCommand(input: String, localOnly: Boolean = false) {
+        if (_uiState.value.pendingSend != null) {
+            val said = input.trim().lowercase()
+            if (Regex("^(send|send it|yes|haan|ha|bhej do|bhejo|bhej de|ok send)\\b").containsMatchIn(said)) { confirmSend(); return }
+            if (Regex("^(cancel|no|nahi|mat bhejo|don'?t)\\b").containsMatchIn(said)) { cancelSend(); return }
+        }
         lastInputPrivate = localOnly
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -329,6 +338,7 @@ class VoiceOverlayViewModel @Inject constructor(
                 }
             }
             LocalIntent.SAVE_PLACE -> localExecutor.savePlace(result.locationName)
+            LocalIntent.SEND_MESSAGE -> prepareMessage(result.recipient ?: "", result.taskTitle ?: "")
             LocalIntent.UNKNOWN -> "I didn't quite catch that. Could you rephrase?"
         }
     }
@@ -446,6 +456,38 @@ class VoiceOverlayViewModel @Inject constructor(
             }
         }
         return null
+    }
+
+    /** Finds the contact and shows the exact message for confirmation — nothing is sent yet. */
+    private fun prepareMessage(who: String, text: String): String {
+        val ctx = repository.context
+        if (!com.paa.assistant.core.messaging.ContactResolver.hasPermission(ctx)) {
+            _uiState.value = _uiState.value.copy(errorMessage = "PAA needs Contacts permission to find $who — allow it, then ask again.")
+            return "I need access to your contacts to find $who."
+        }
+        val matches = com.paa.assistant.core.messaging.ContactResolver.find(ctx, who)
+        if (matches.isEmpty()) return "I couldn't find \"$who\" in your contacts."
+        _uiState.value = _uiState.value.copy(pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3)))
+        return "Send to ${matches.first().name}?\n\"$text\"" + if (matches.size > 1) "\n(Other matches below.)" else ""
+    }
+
+    /** The owner tapped Send (or said "send"/"bhej do"). */
+    fun confirmSend(contact: com.paa.assistant.core.messaging.Contact? = null) {
+        val p = _uiState.value.pendingSend ?: return
+        val to = contact ?: p.contact
+        _uiState.value = _uiState.value.copy(pendingSend = null)
+        val result = com.paa.assistant.core.messaging.WhatsAppSender.send(repository.context, to, p.text)
+        deliverResponse(when (result) {
+            com.paa.assistant.core.messaging.WhatsAppSender.Result.SENT -> "📤 Sent to ${to.name}."
+            com.paa.assistant.core.messaging.WhatsAppSender.Result.OPENED_FOR_TAP -> "Your phone is locked — tap the notification to send it to ${to.name}."
+            com.paa.assistant.core.messaging.WhatsAppSender.Result.LIMIT_REACHED -> "I've already sent ${com.paa.assistant.core.messaging.WhatsAppSender.DAILY_LIMIT} messages today — that's the daily limit."
+            com.paa.assistant.core.messaging.WhatsAppSender.Result.FAILED -> "Couldn't send it."
+        })
+    }
+
+    fun cancelSend() {
+        _uiState.value = _uiState.value.copy(pendingSend = null)
+        deliverResponse("Okay, not sent.")
     }
 
     // Replies are shown as text in the popup only — never read aloud (user preference: privacy)

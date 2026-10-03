@@ -78,6 +78,10 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
         mutableStateOf(ContextCompat.checkSelfPermission(context, audioPerm) == PackageManager.PERMISSION_GRANTED)
     }
     val recordingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { recordingsOn = it }
+    var contactsOn by remember(permissionTick) {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED)
+    }
+    val contactsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { contactsOn = it }
     val chatReadingOn = remember(permissionTick) {
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
             ?.let { it.contains(context.packageName) && it.contains("ChatTaskAccessibilityService") } == true
@@ -369,6 +373,11 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                             ok = chatReadingOn,
                             label = "Accessibility (your sent messages + open chat)",
                             onFix = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                        )
+                        PermissionLine(
+                            ok = contactsOn,
+                            label = "Contacts (send WhatsApp messages you approve)",
+                            onFix = { contactsLauncher.launch(Manifest.permission.READ_CONTACTS) }
                         )
                         PermissionLine(
                             ok = recordingsOn,

@@ -44,6 +44,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
     private var lastScan = 0L
 
     override fun onDestroy() {
+        running = null
         scope.cancel()
         super.onDestroy()
     }
@@ -52,6 +53,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        running = this
         DetectionLog.init(this)
         DetectionLog.add("system", "Accessibility", "✅ connected — sent messages & open chats will be read")
         // Bring the "Oyee PA" listener back if it was on (best effort; Android may require opening the app)
@@ -92,9 +94,23 @@ class ChatTaskAccessibilityService : AccessibilityService() {
                 }
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                if (app == ChatApp.WHATSAPP) scanOpenChat(pkg)
+                if (app == ChatApp.WHATSAPP) { tapSendIfApproved(pkg); scanOpenChat(pkg) }
             }
         }
+    }
+
+    /** A message the owner approved in PAA is open in its chat, text filled in: tap Send once. */
+    private fun tapSendIfApproved(pkg: String) {
+        val p = pendingSend ?: return
+        if (System.currentTimeMillis() > p.until) { pendingSend = null; return }
+        val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
+        val chat = findText(root, "$pkg:id/conversation_contact_name") ?: return
+        if (!chat.equals(p.chat, ignoreCase = true) && !chat.contains(p.chat, ignoreCase = true) && !p.chat.contains(chat, ignoreCase = true)) return
+        val box = root.findAccessibilityNodeInfosByViewId("$pkg:id/entry")?.firstOrNull()
+        if (box?.text?.toString()?.trim() != p.text.trim()) return
+        val send = root.findAccessibilityNodeInfosByViewId("$pkg:id/send")?.firstOrNull() ?: return
+        pendingSend = null
+        send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun onSent(text: String, app: ChatApp) {
@@ -194,6 +210,17 @@ class ChatTaskAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        private data class PendingSend(val chat: String, val text: String, val until: Long)
+        @Volatile private var pendingSend: PendingSend? = null
+        @Volatile private var running: ChatTaskAccessibilityService? = null
+
+        fun isRunning() = running != null
+
+        /** WhatsAppSender: the owner approved [text] for [chat]; tap Send when that chat opens (within 20 s). */
+        fun autoSend(chat: String, text: String) {
+            pendingSend = PendingSend(chat, text, System.currentTimeMillis() + 20_000)
+        }
+
         private val CHAT_HEADER_IDS = listOf(
             "com.whatsapp:id/conversation_contact_name",
             "com.whatsapp.w4b:id/conversation_contact_name"

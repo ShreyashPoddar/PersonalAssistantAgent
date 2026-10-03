@@ -131,6 +131,17 @@ fun VoiceOverlayScreen(
             // ── PAA RESPONSE CARD ─────────────────────────────────────────────
             if (uiState.responseText.isNotBlank()) {
                 ResponseCard(text = uiState.responseText)
+            }
+            // A message waiting for OK: nothing is sent until the owner taps Send
+            uiState.pendingSend?.let { p ->
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = { viewModel.confirmSend() }) { Text("📤 Send to ${p.contact.name}") }
+                    OutlinedButton(onClick = { viewModel.cancelSend() }) { Text("Cancel") }
+                }
+                p.alternatives.forEach { alt ->
+                    TextButton(onClick = { viewModel.confirmSend(alt) }) { Text("Send to ${alt.name} instead") }
+                }
                 Spacer(Modifier.height(12.dp))
             }
 

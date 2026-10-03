@@ -72,7 +72,7 @@ class IntentRouter @Inject constructor(
         // Always-local intents: they read the user's (possibly private) task list or places,
         // so they must never go to the cloud even if they contain words like "plan my" or "current".
         val early = parser.parse(input)
-        if (early.intent in setOf(LocalIntent.PLAN_TASKS, LocalIntent.SAVE_PLACE, LocalIntent.LIST_TASKS, LocalIntent.QUERY_AGENDA, LocalIntent.RESCHEDULE_TASK) ||
+        if (early.intent in setOf(LocalIntent.PLAN_TASKS, LocalIntent.SAVE_PLACE, LocalIntent.LIST_TASKS, LocalIntent.QUERY_AGENDA, LocalIntent.RESCHEDULE_TASK, LocalIntent.SEND_MESSAGE) ||
             (early.intent == LocalIntent.CREATE_TASK && early.locationName != null)
         ) {
             return ExecutionRoute.LocalExecution(early)
