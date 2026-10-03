@@ -86,13 +86,14 @@ object DatabaseEncryption {
         }.generateKey()
     }
 
-    private fun encrypt(plain: String): String {
+    /** AES-GCM with the hardware-backed Keystore key (also used for the detection log file). */
+    internal fun encrypt(plain: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
         val out = cipher.iv + cipher.doFinal(plain.toByteArray())
         return Base64.encodeToString(out, Base64.NO_WRAP)
     }
 
-    private fun decrypt(stored: String): String {
+    internal fun decrypt(stored: String): String {
         val data = Base64.decode(stored, Base64.NO_WRAP)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, data, 0, 12))

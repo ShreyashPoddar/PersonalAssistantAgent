@@ -29,6 +29,12 @@ class DebugInjectReceiver : BroadcastReceiver() {
             }
             return
         }
+        // --ez dumplog true: plaintext copy of the (encrypted) detection log for tools/eval_chats.py
+        if (intent.getBooleanExtra("dumplog", false)) {
+            DetectionLog.init(context)
+            java.io.File(context.filesDir, "detection_log_debug.json").writeText(DetectionLog.json())
+            return
+        }
         val text = intent.getStringExtra("text") ?: return
         // Not goAsync(): the AI takes ~1 min, far beyond the broadcast time limit (→ ANR kill)
         CoroutineScope(Dispatchers.Default).launch {

@@ -28,7 +28,11 @@ def adb(serial, *args):
 
 
 def log_entries(serial):
-    raw = adb(serial, "shell", "run-as", "com.paa.assistant", "cat", "files/detection_log.json")
+    # The log is encrypted on the phone; debug builds write a plaintext copy on request
+    adb(serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
+        "--ez", "dumplog", "true")
+    time.sleep(1)
+    raw = adb(serial, "shell", "run-as", "com.paa.assistant", "cat", "files/detection_log_debug.json")
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
