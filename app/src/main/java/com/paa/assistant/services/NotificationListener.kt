@@ -107,6 +107,11 @@ class NotificationListener : NotificationListenerService() {
             listOf(Msg(body, title, sbn.postTime, fromSelf = false))
         }
 
+        // Owner on a phone call: listed contacts get one "will call you back"
+        if (!isGroup && chatName != null && newMessages.any { !it.fromSelf } &&
+            getSystemService(android.media.AudioManager::class.java).mode == android.media.AudioManager.MODE_IN_CALL
+        ) com.paa.assistant.core.messaging.WhatsAppSender.autoReplyDuringCall(this, chatName)
+
         for (m in newMessages) {
             if (m.text.isBlank() || systemText.containsMatchIn(m.text.trim())) continue
             val mine = m.fromSelf || (selfName != null && m.sender == selfName)

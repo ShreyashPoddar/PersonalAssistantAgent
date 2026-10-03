@@ -37,6 +37,10 @@ object UserProfile {
     @Volatile var hackathonGroups = listOf("hackstreet_Boys")
         private set
 
+    /** Contacts that get "on a call, will call back" while the owner is on a call (opt-in, empty = off). */
+    @Volatile var autoReplyContacts = emptyList<String>()
+        private set
+
     @Volatile private var mentionRegex = buildMention()
 
     private fun buildMention() = Regex("(?:@|\\b)(${names.joinToString("|") { Regex.escape(it) }})\\b", RegexOption.IGNORE_CASE)
@@ -50,11 +54,13 @@ object UserProfile {
         ALARM_START_HOUR = p.getInt("alarm_start", ALARM_START_HOUR)
         ALARM_END_HOUR = p.getInt("alarm_end", ALARM_END_HOUR)
         p.getString("hackathon_groups", null)?.let { hackathonGroups = splitList(it) }
+        autoReplyContacts = splitList(p.getString("auto_reply", "") ?: "")
         mentionRegex = buildMention()
     }
 
-    fun save(context: Context, names: String, gradYear: Int, hackathonGroups: String, alarmStart: Int, alarmEnd: Int, groupMinutes: Int) {
+    fun save(context: Context, names: String, gradYear: Int, hackathonGroups: String, alarmStart: Int, alarmEnd: Int, groupMinutes: Int, autoReply: String) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("auto_reply", autoReply)
             .putString("names", names).putInt("grad_year", gradYear).putString("hackathon_groups", hackathonGroups)
             .putInt("alarm_start", alarmStart.coerceIn(0, 23)).putInt("alarm_end", alarmEnd.coerceIn(1, 24))
             .putInt("group_minutes", groupMinutes.coerceIn(5, 24 * 60)).apply()

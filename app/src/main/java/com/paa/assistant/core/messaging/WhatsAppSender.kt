@@ -47,6 +47,24 @@ object WhatsAppSender {
         return result
     }
 
+    /**
+     * Auto-reply while the owner is on a call — only to contacts they listed, once per contact per hour,
+     * counted against [DAILY_LIMIT]. Uses the notification's reply button only (no screen needed).
+     */
+    fun autoReplyDuringCall(context: Context, chatName: String): Boolean {
+        val listed = com.paa.assistant.core.profile.UserProfile.autoReplyContacts.any { it.equals(chatName, ignoreCase = true) }
+        if (!listed || sentToday(context) >= DAILY_LIMIT) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = "auto_" + chatName.lowercase().hashCode()
+        if (System.currentTimeMillis() - prefs.getLong(key, 0) < 3_600_000L) return false
+        val text = "I'm on a call right now, will call you back soon. (auto-reply)"
+        if (!replyViaNotification(context, chatName, text)) return false
+        prefs.edit().putLong(key, System.currentTimeMillis()).apply()
+        countSent(context)
+        DetectionLog.add("→ $chatName", text, "📤 auto-reply (you were on a call)")
+        return true
+    }
+
     /** Way 1: WhatsApp's notification for this chat has a "Reply" action we can fill in. */
     private fun replyViaNotification(context: Context, chatName: String, text: String): Boolean {
         val listener = NotificationListener.instance ?: return false
@@ -98,6 +116,8 @@ object WhatsAppSender {
     private fun today() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
     private fun sentToday(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(today(), 0)
     private fun countSent(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).let {
-        it.edit().clear().putInt(today(), sentToday(context) + 1).apply()
+        val n = sentToday(context) + 1
+        // Keep only today's counter (and the auto-reply timestamps)
+        it.edit().apply { it.all.keys.filter { k -> !k.startsWith("auto_") }.forEach { k -> remove(k) } }.putInt(today(), n).apply()
     }
 }

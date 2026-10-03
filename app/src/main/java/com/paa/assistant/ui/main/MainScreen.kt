@@ -411,6 +411,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                             var start by remember { mutableStateOf(up.ALARM_START_HOUR.toString()) }
                             var end by remember { mutableStateOf(up.ALARM_END_HOUR.toString()) }
                             var groupMin by remember { mutableStateOf(up.GROUP_REQUEST_DEFAULT_MINUTES.toString()) }
+                            var autoReply by remember { mutableStateOf(up.autoReplyContacts.joinToString(", ")) }
                             AlertDialog(
                                 onDismissRequest = { editMe = false },
                                 title = { Text("About me") },
@@ -422,13 +423,14 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                         OutlinedTextField(start, { start = it }, label = { Text("Alarms may ring from (hour, 0–23)") }, singleLine = true)
                                         OutlinedTextField(end, { end = it }, label = { Text("…until (hour, 1–24)") }, singleLine = true)
                                         OutlinedTextField(groupMin, { groupMin = it }, label = { Text("Group request without a time: due in (minutes)") }, singleLine = true)
+                                        OutlinedTextField(autoReply, { autoReply = it }, label = { Text("Auto-reply \"on a call\" to (chat names, comma-separated; empty = off)") })
                                     }
                                 },
                                 confirmButton = {
                                     TextButton(onClick = {
                                         up.save(context, names, year.toIntOrNull() ?: up.GRADUATION_YEAR, groups,
                                             start.toIntOrNull() ?: up.ALARM_START_HOUR, end.toIntOrNull() ?: up.ALARM_END_HOUR,
-                                            groupMin.toIntOrNull() ?: up.GROUP_REQUEST_DEFAULT_MINUTES)
+                                            groupMin.toIntOrNull() ?: up.GROUP_REQUEST_DEFAULT_MINUTES, autoReply)
                                         editMe = false
                                     }) { Text("Save") }
                                 },
