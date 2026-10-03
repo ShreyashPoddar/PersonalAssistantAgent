@@ -69,7 +69,7 @@ class ChatMessageProcessor @Inject constructor(
     companion object {
         const val AUTO_SCHEDULE = 0.75f
         /** Details that appear only in LocalLlm's few-shot examples. */
-        private val PROMPT_EXAMPLE_WORDS = listOf("ahana", "senthil", "dbms", "rahul", "ppt", "groceries", "wifi", "flatmates", "rohit", "aman")
+        private val PROMPT_EXAMPLE_WORDS = listOf("ahana", "senthil", "dbms", "rahul", "ppt", "groceries", "wifi", "flatmates", "rohit", "aman", "riya", "dadaji")
         const val ASK_USER = 0.4f
         private const val HISTORY_PER_CHAT = 12
         /** Quiet time after the last message of a burst before it's read. */
@@ -251,6 +251,10 @@ class ChatMessageProcessor @Inject constructor(
             log("skipped: group message not addressed to you"); return found
         }
 
+        // The model takes ~1 min on this phone: pure chatter ("haha", "kya scene") doesn't need it
+        if (msg.app != ChatApp.CALL && !com.paa.assistant.core.router.TaskSignal.hasSignal(text, chatTasks.isNotEmpty())) {
+            log("skipped: no task words"); return found
+        }
         if (localLlm.isAvailable()) log("🧠 asking local AI…")
         val learned = learnedExamples()
         val verdict = localLlm.extractTasks(

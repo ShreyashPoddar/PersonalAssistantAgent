@@ -1,1 +1,7 @@
 PASS  hinglish_two_tasks  (58s)
+PASS  ad_ignored  (43s)
+PASS  suggestion_not_task  (43s)
+PASS  group_mention_compact_time  (48s)
+FAIL  bare_acceptance  (43s)
+      unexpected '📌': 📌 Call Dadaji back · no deadline said (AI) — You promised to call Dadaji back.
+PASS  money_deadline  (43s)

@@ -12,7 +12,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -62,6 +67,9 @@ class LocalLlm @Inject constructor(
         const val MODEL_FILE_NAME = "gemma3-1b.task"
         private const val IDLE_RELEASE_MS = 5 * 60_000L  // loading is the slow part; keep warm between messages
         private const val INFERENCE_TIMEOUT_MS = 120_000L  // includes a cold model load
+        private const val GENERATE_TIMEOUT_MS = 90_000L
+        /** The engine's window (input + output) is 2048 tokens; keep room for the JSON answer. */
+        const val PROMPT_BUDGET = 2048 - 350
 
         /** Entries seen in the last .tar.gz (for diagnostics). */
         val lastTarEntries = mutableListOf<String>()
@@ -137,6 +145,106 @@ class LocalLlm @Inject constructor(
             }
             return ChatVerdict(tasks, root.optString("reason").trim().takeIf { it.isNotBlank() && it != "null" }, done.distinct(), updates)
         }
+
+        /**
+         * Prompt within [PROMPT_BUDGET] tokens: drops the owner's ✓/✗ examples first, then older chat lines,
+         * then open tasks beyond 4, and finally cuts the start of a long message (calls).
+         */
+        internal fun fitPrompt(message: String, ctx: ChatContext, count: (String) -> Int): String {
+            var c = ctx
+            var m = message
+            val steps = listOf<() -> Boolean>(
+                { (c.learnedExamples.isNotEmpty()).also { c = c.copy(learnedExamples = emptyList()) } },
+                { (c.recentMessages.size > 4).also { c = c.copy(recentMessages = c.recentMessages.takeLast(4)) } },
+                { (c.openTasks.size > 4).also { c = c.copy(openTasks = c.openTasks.take(4)) } },
+                { (c.recentMessages.isNotEmpty()).also { c = c.copy(recentMessages = emptyList()) } },
+            )
+            var prompt = buildChatPrompt(m, c)
+            for (step in steps) {
+                if (count(prompt) <= PROMPT_BUDGET) return prompt
+                if (step()) prompt = buildChatPrompt(m, c)
+            }
+            while (count(prompt) > PROMPT_BUDGET && m.length > 200) {
+                m = m.takeLast(m.length * 3 / 4)
+                prompt = buildChatPrompt(m, c)
+            }
+            return prompt
+        }
+
+        internal fun buildChatPrompt(message: String, ctx: ChatContext): String {
+            val now = SimpleDateFormat("EEEE, yyyy-MM-dd HH:mm", Locale.ENGLISH).format(Date())
+            val names = UserProfile.names.joinToString(" or ") { it.replaceFirstChar(Char::uppercase) }
+            val who = when {
+                ctx.isCall -> "This is an automatic speech-to-text transcript of the last minute or two of the owner's phone call " +
+                    "(both speakers mixed together, may contain recognition errors). The owner just said \"Oyee PA\" to ask you " +
+                    "to schedule whatever they agreed to do or were asked to do on this call. Ignore the words \"oyee PA\" themselves."
+                ctx.burst -> "These are the newest messages of the chat \"${ctx.chatName ?: "?"}\"" + (if (ctx.isGroup) " (a group)" else "") +
+                    ", oldest first, one per line as 'Speaker: text' ('You' is the owner). A task and its deadline or details are often " +
+                    "spread over several lines — read them together as one conversation."
+                ctx.outgoing -> "The owner SENT this message" + (ctx.chatName?.let { " to $it" } ?: "") + "."
+                ctx.isGroup -> "The owner RECEIVED this in the group \"${ctx.chatName ?: "?"}\"" + (ctx.sender?.let { " from $it" } ?: "") + "."
+                else -> "The owner RECEIVED this" + ((ctx.sender ?: ctx.chatName)?.let { " from $it" } ?: "") + "."
+            }
+            fun clean(s: String) = s.take(200).replace("\"", "'").replace("\n", " ")
+            val history = if (ctx.recentMessages.isEmpty()) "" else
+                "Earlier in this chat (oldest first). Do not create tasks that appear ONLY here, but DO use these lines to fill in " +
+                    "details — the deadline, what 'it' is, who is involved:\n" +
+                    ctx.recentMessages.takeLast(8).joinToString("\n") { "  ${clean(it)}" } + "\n"
+            val learned = if (ctx.learnedExamples.isEmpty()) "" else
+                "The owner has personally judged these messages before — follow the same judgement:\n" +
+                    ctx.learnedExamples.joinToString("\n") { (m, title) ->
+                        "  \"${clean(m)}\" → " + (title?.let { "IS a task: $it" } ?: "NOT a task")
+                    } + "\n"
+            val open = if (ctx.openTasks.isEmpty()) "" else
+                "Open tasks (numbered):\n" + ctx.openTasks.mapIndexed { n, t -> "  ${n + 1}. ${clean(t)}" }.joinToString("\n") +
+                    "\nIf this message shows the owner has ALREADY DONE one of them (confirmed it, sent it, paid, \"done\", \"bhej diya\", " +
+                    "\"ho gaya\", \"hn bhai\" answering that exact question), put its number in \"done\". Only when clearly finished; a promise to do it later is NOT done.\n" +
+                    "If the messages give a NEW or CHANGED deadline or detail for one of them, put it in \"update\" — do NOT create it again as a new task.\n"
+            return """
+    You are the owner's personal assistant. Read the message as a person would — its meaning, who is speaking,
+    and what was said before — and decide which real to-do items it creates for the owner.
+    The owner is called $names and graduates in ${UserProfile.GRADUATION_YEAR}. Messages may be English, Hindi or Hinglish.
+    Current date and time: $now
+    $who
+    $history$open$learned
+    Think about:
+    - Is the OWNER the one who must act? A promise they make ("I'll call you at 5", "kal bhej dunga"), or a request made to them.
+    - Is it real and still pending? Not already done, not a joke, not a suggestion ("call pe baat karte hai" = let's talk, not a task),
+      not someone else's plan, not an ad/newsletter/announcement for everyone.
+    - In a group, a request counts only if it names the owner.
+    - Replies like "haan kar dunga" / "ok will do" accept the request in the conversation above → that request is the task.
+      If there is no conversation above, such a reply alone is NOT a task (you can't know what was accepted).
+    - Never copy tasks from the examples below; they are only about format.
+    - Internship/job posts are tasks only if open to the ${UserProfile.GRADUATION_YEAR} batch or no batch is named.
+
+    For each task give:
+    - "title": the work in 2-7 English words starting with a verb; resolve "it/that" from the conversation. If a person is involved
+      (who asked, who receives it, who you meet or call), name them: "Send notes to Riya", "Call Dadaji back", "Pay Rohit for wifi".
+    - "when": ALL the words that say when, joined, even from different lines ("kal tak" + "5 baje se pehle" → "kal 5 baje se pehle"),
+      e.g. "by 140", "1145", "kal 5 baje", "tonight", "last date aaj"; or null. 140/315/1145 are clock times.
+    - ONE task per piece of work. Never list the same work twice with different times or wording.
+    - "priority": 0-3. "registration": true if registering for a hackathon/event.
+    - "confidence": 0.0-1.0, how sure you are this is a real task for the owner.
+    - "reason": one short sentence a person would understand ("You promised Ahana to submit it today").
+    Reply with ONLY JSON:
+    {"tasks": [{"title": "...", "when": "..." or null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "..."}], "reason": "why there is no task, if tasks is empty", "done": [], "update": [{"n": 1, "when": "new deadline words", "title": "clearer title or null"}]}
+
+    Message (sent to Rahul): "ok bro I'll call you by 140 and send the ppt at 315"
+    {"tasks": [{"title": "Call Rahul", "when": "by 140", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul a call by 1:40."}, {"title": "Send the ppt to Rahul", "when": "at 315", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised to send Rahul the ppt at 3:15."}], "reason": ""}
+    Conversation: "Ahana: But i need to go to senthil first" / Message (sent to Ahana): "I too need to submit it today, last date hai aaj"
+    {"tasks": [{"title": "Submit assignment to Senthil", "when": "last date hai aaj", "priority": 2, "registration": false, "confidence": 0.85, "reason": "You said you must submit it to Senthil today; it's the last date."}], "reason": ""}
+    Message (received from Aman): "call pe baat karte hai"
+    {"tasks": [], "reason": "A suggestion to talk, not something you must do."}
+    Message (received): "Register now for the biggest hackathon of the year! Get 20% off"
+    {"tasks": [], "reason": "An advertisement, not addressed to you."}
+    Message (received in group Flatmates from Rohit): "@Shreyash order groceries and pay the wifi bill"
+    {"tasks": [{"title": "Order groceries", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to order groceries."}, {"title": "Pay the wifi bill", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to pay the wifi bill."}], "reason": ""}
+    Message (sent): "I already submitted it lol"
+    {"tasks": [], "reason": "Already done."}
+
+    ${if (ctx.burst) "Messages" else "Message"}: "${message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'").let { if (ctx.burst) it else it.replace("\n", " ") }}"
+    """.trimIndent()
+        }
     }
 
     val modelFile: File
@@ -164,7 +272,7 @@ class LocalLlm @Inject constructor(
                     val llm = engine ?: createEngine().also { engine = it }
                     loadedAt = System.currentTimeMillis()
                     scheduleRelease()
-                    runInterruptible { ask(llm, "Reply with exactly one word: OK") }
+                    ask(llm, "Reply with exactly one word: OK")
                 }
             }
             val end = System.currentTimeMillis()
@@ -219,7 +327,7 @@ class LocalLlm @Inject constructor(
                     kotlinx.coroutines.withTimeout(if (ctx.isCall) 2 * INFERENCE_TIMEOUT_MS else INFERENCE_TIMEOUT_MS) {
                         val llm = engine ?: createEngine().also { engine = it }
                         scheduleRelease()
-                        runInterruptible { ask(llm, buildChatPrompt(message.take(1500), ctx)) }
+                        ask(llm, fitPrompt(message.take(1500), ctx) { runCatching { llm.sizeInTokens(it) }.getOrDefault(it.length / 3) })
                     }
                 }
                 parseVerdict(raw)
@@ -361,11 +469,39 @@ class LocalLlm @Inject constructor(
     }
 
     /** Greedy decoding: the engine's default session samples (temperature 0.8), which breaks the JSON. */
-    private fun ask(llm: LlmInference, prompt: String): String {
+    /** Timing of the last model run, for the 🧠 card ("prompt 1480 tokens · 52 s"). */
+    @Volatile var lastStats: String = "-"
+        private set
+
+    /**
+     * Greedy decoding (the engine's default session samples at temperature 0.8, which breaks the JSON).
+     * Async + cancel: the blocking generateResponse() ignores coroutine timeouts and kept the model busy.
+     */
+    private suspend fun ask(llm: LlmInference, prompt: String): String {
         val options = LlmInferenceSession.LlmInferenceSessionOptions.builder().setTopK(1).setTemperature(0f).build()
-        return LlmInferenceSession.createFromOptions(llm, options).use { session ->
+        val session = LlmInferenceSession.createFromOptions(llm, options)
+        val start = System.currentTimeMillis()
+        val tokens = runCatching { session.sizeInTokens(prompt) }.getOrDefault(-1)
+        var future: com.google.common.util.concurrent.ListenableFuture<String>? = null
+        try {
             session.addQueryChunk(prompt)
-            session.generateResponse()
+            val f = session.generateResponseAsync().also { future = it }
+            return suspendCancellableCoroutine { cont ->
+                cont.invokeOnCancellation { runCatching { session.cancelGenerateResponseAsync() } }
+                f.addListener({
+                    runCatching { f.get() }
+                        .onSuccess { cont.resume(it) }
+                        .onFailure { if (cont.isActive) cont.resumeWithException(it.cause ?: it) }
+                }, Runnable::run)
+            }
+        } finally {
+            lastStats = "prompt $tokens tokens · ${(System.currentTimeMillis() - start) / 1000} s"
+            Log.i(tag, "Local AI: $lastStats")
+            // Closing while native generation still runs can crash: wait (bounded) for it to stop
+            withContext(NonCancellable) {
+                withTimeoutOrNull(15_000) { while (future?.isDone == false) delay(100) }
+                runCatching { session.close() }
+            }
         }
     }
 
@@ -394,7 +530,7 @@ class LocalLlm @Inject constructor(
                 mutex.withLock {
                     val llm = engine ?: createEngine().also { engine = it }
                     scheduleRelease()
-                    ask(llm, prompt).trim()
+                    withTimeout(GENERATE_TIMEOUT_MS) { ask(llm, prompt) }.trim()
                 }
             } catch (e: Throwable) {
                 Log.e(tag, "Local generation failed: ${e.javaClass.simpleName}")
@@ -403,80 +539,6 @@ class LocalLlm @Inject constructor(
         }
     }
 
-    private fun buildChatPrompt(message: String, ctx: ChatContext): String {
-        val now = SimpleDateFormat("EEEE, yyyy-MM-dd HH:mm", Locale.ENGLISH).format(Date())
-        val names = UserProfile.names.joinToString(" or ") { it.replaceFirstChar(Char::uppercase) }
-        val who = when {
-            ctx.isCall -> "This is an automatic speech-to-text transcript of the last minute or two of the owner's phone call " +
-                "(both speakers mixed together, may contain recognition errors). The owner just said \"Oyee PA\" to ask you " +
-                "to schedule whatever they agreed to do or were asked to do on this call. Ignore the words \"oyee PA\" themselves."
-            ctx.burst -> "These are the newest messages of the chat \"${ctx.chatName ?: "?"}\"" + (if (ctx.isGroup) " (a group)" else "") +
-                ", oldest first, one per line as 'Speaker: text' ('You' is the owner). A task and its deadline or details are often " +
-                "spread over several lines — read them together as one conversation."
-            ctx.outgoing -> "The owner SENT this message" + (ctx.chatName?.let { " to $it" } ?: "") + "."
-            ctx.isGroup -> "The owner RECEIVED this in the group \"${ctx.chatName ?: "?"}\"" + (ctx.sender?.let { " from $it" } ?: "") + "."
-            else -> "The owner RECEIVED this" + ((ctx.sender ?: ctx.chatName)?.let { " from $it" } ?: "") + "."
-        }
-        fun clean(s: String) = s.take(200).replace("\"", "'").replace("\n", " ")
-        val history = if (ctx.recentMessages.isEmpty()) "" else
-            "Earlier in this chat (oldest first). Do not create tasks that appear ONLY here, but DO use these lines to fill in " +
-                "details — the deadline, what 'it' is, who is involved:\n" +
-                ctx.recentMessages.takeLast(8).joinToString("\n") { "  ${clean(it)}" } + "\n"
-        val learned = if (ctx.learnedExamples.isEmpty()) "" else
-            "The owner has personally judged these messages before — follow the same judgement:\n" +
-                ctx.learnedExamples.joinToString("\n") { (m, title) ->
-                    "  \"${clean(m)}\" → " + (title?.let { "IS a task: $it" } ?: "NOT a task")
-                } + "\n"
-        val open = if (ctx.openTasks.isEmpty()) "" else
-            "Open tasks (numbered):\n" + ctx.openTasks.mapIndexed { n, t -> "  ${n + 1}. ${clean(t)}" }.joinToString("\n") +
-                "\nIf this message shows the owner has ALREADY DONE one of them (confirmed it, sent it, paid, \"done\", \"bhej diya\", " +
-                "\"ho gaya\", \"hn bhai\" answering that exact question), put its number in \"done\". Only when clearly finished; a promise to do it later is NOT done.\n" +
-                "If the messages give a NEW or CHANGED deadline or detail for one of them, put it in \"update\" — do NOT create it again as a new task.\n"
-        return """
-You are the owner's personal assistant. Read the message as a person would — its meaning, who is speaking,
-and what was said before — and decide which real to-do items it creates for the owner.
-The owner is called $names and graduates in ${UserProfile.GRADUATION_YEAR}. Messages may be English, Hindi or Hinglish.
-Current date and time: $now
-$who
-$history$open$learned
-Think about:
-- Is the OWNER the one who must act? A promise they make ("I'll call you at 5", "kal bhej dunga"), or a request made to them.
-- Is it real and still pending? Not already done, not a joke, not a suggestion ("call pe baat karte hai" = let's talk, not a task),
-  not someone else's plan, not an ad/newsletter/announcement for everyone.
-- In a group, a request counts only if it names the owner.
-- Replies like "haan kar dunga" / "ok will do" accept the request in the conversation above → that request is the task.
-  If there is no conversation above, such a reply alone is NOT a task (you can't know what was accepted).
-- Never copy tasks from the examples below; they are only about format.
-- Internship/job posts are tasks only if open to the ${UserProfile.GRADUATION_YEAR} batch or no batch is named.
-
-For each task give:
-- "title": the work in 2-7 English words starting with a verb; resolve "it/that" from the conversation. If a person is involved
-  (who asked, who receives it, who you meet or call), name them: "Send notes to Riya", "Call Dadaji back", "Pay Rohit for wifi".
-- "when": ALL the words that say when, joined, even from different lines ("kal tak" + "5 baje se pehle" → "kal 5 baje se pehle"),
-  e.g. "by 140", "1145", "kal 5 baje", "tonight", "last date aaj"; or null. 140/315/1145 are clock times.
-- ONE task per piece of work. Never list the same work twice with different times or wording.
-- "priority": 0-3. "registration": true if registering for a hackathon/event.
-- "confidence": 0.0-1.0, how sure you are this is a real task for the owner.
-- "reason": one short sentence a person would understand ("You promised Ahana to submit it today").
-Reply with ONLY JSON:
-{"tasks": [{"title": "...", "when": "..." or null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "..."}], "reason": "why there is no task, if tasks is empty", "done": [], "update": [{"n": 1, "when": "new deadline words", "title": "clearer title or null"}]}
-
-Message (sent to Rahul): "ok bro I'll call you by 140 and send the ppt at 315"
-{"tasks": [{"title": "Call Rahul", "when": "by 140", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised Rahul a call by 1:40."}, {"title": "Send the ppt to Rahul", "when": "at 315", "priority": 1, "registration": false, "confidence": 0.95, "reason": "You promised to send Rahul the ppt at 3:15."}], "reason": ""}
-Conversation: "Ahana: But i need to go to senthil first" / Message (sent to Ahana): "I too need to submit it today, last date hai aaj"
-{"tasks": [{"title": "Submit assignment to Senthil", "when": "last date hai aaj", "priority": 2, "registration": false, "confidence": 0.85, "reason": "You said you must submit it to Senthil today; it's the last date."}], "reason": ""}
-Message (received from Aman): "call pe baat karte hai"
-{"tasks": [], "reason": "A suggestion to talk, not something you must do."}
-Message (received): "Register now for the biggest hackathon of the year! Get 20% off"
-{"tasks": [], "reason": "An advertisement, not addressed to you."}
-Message (received in group Flatmates from Rohit): "@Shreyash order groceries and pay the wifi bill"
-{"tasks": [{"title": "Order groceries", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to order groceries."}, {"title": "Pay the wifi bill", "when": null, "priority": 1, "registration": false, "confidence": 0.9, "reason": "Rohit asked you in Flatmates to pay the wifi bill."}], "reason": ""}
-Message (sent): "I already submitted it lol"
-{"tasks": [], "reason": "Already done."}
-
-${if (ctx.burst) "Messages" else "Message"}: "${message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'").let { if (ctx.burst) it else it.replace("\n", " ") }}"
-""".trimIndent()
-    }
 
     /** Date arithmetic is done here, not by the model — small models are unreliable at it. */
     fun resolveTimestamp(day: String?, time: String?): Long? {
