@@ -53,6 +53,12 @@ android {
             "GEMINI_API_KEY",
             "\"${getSecret("GEMINI_API_KEY")}\""
         )
+        // Anthropic (Claude) key – optional second cloud brain for heavy, non-private requests
+        buildConfigField(
+            "String",
+            "ANTHROPIC_API_KEY",
+            "\"${getSecret("ANTHROPIC_API_KEY")}\""
+        )
         // Tavily web-search key (free tier) – fallback when Gemini search grounding is unavailable
         buildConfigField(
             "String",

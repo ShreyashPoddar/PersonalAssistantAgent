@@ -62,7 +62,8 @@ class VoiceOverlayViewModel @Inject constructor(
     private val geminiClient: GeminiClient,
     private val storageManager: StorageManager,
     private val calendarManager: CalendarManager,
-    private val geofenceManager: GeofenceManager
+    private val geofenceManager: GeofenceManager,
+    private val claude: com.paa.assistant.core.ai.ClaudeClient
 ) : ViewModel() {
 
     private val tag = "VoiceOverlayVM"
@@ -249,6 +250,14 @@ class VoiceOverlayViewModel @Inject constructor(
                     }
                     val combinedContext = "$taskSummary\n$calendarSummary"
 
+                    // Heavy, non-private requests (plans, comparisons, write-ups) → Claude, if configured
+                    if (claude.isConfigured && com.paa.assistant.core.ai.ClaudeClient.isHeavy(input)) {
+                        _uiState.value = _uiState.value.copy(partialText = "Thinking it through…")
+                        claude.ask(input, combinedContext, deep = com.paa.assistant.core.ai.ClaudeClient.wantsDeepest(input))?.let {
+                            deliverResponse(it)
+                            return@launch
+                        }
+                    }
                     // Gemini first: ~1–2 s. The on-device model takes far longer on this phone and may be
                     // busy with a call recording, so it's only the offline fallback.
                     val geminiResponse = kotlinx.coroutines.withTimeoutOrNull(10_000) {
