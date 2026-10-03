@@ -28,8 +28,12 @@ class NotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** Newest message time already processed, per conversation (chat apps re-post old messages). */
-    private val lastSeen = HashMap<String, Long>()
+    /**
+     * Newest message time already processed, per conversation (chat apps re-post old messages).
+     * Saved, so a restart doesn't re-read the last 10 minutes; keys are hashed (no chat names on disk).
+     */
+    private val lastSeen by lazy { getSharedPreferences("notif_last_seen", MODE_PRIVATE) }
+    private fun seenKey(key: String) = key.hashCode().toString()
 
     // Gmail is not watched: almost all of it is promotions/newsletters, not personal tasks
     private val apps = mapOf(
@@ -85,34 +89,39 @@ class NotificationListener : NotificationListenerService() {
         val chatName = cleanChatName(conversationTitle ?: title)
         val key = "${sbn.packageName}|${chatName ?: sbn.key}"
 
+        // The owner's own replies (from the notification or another device) are in the list too
+        val selfName = extras.getCharSequence(Notification.EXTRA_SELF_DISPLAY_NAME)?.toString()
+            ?: (extras.get(Notification.EXTRA_MESSAGING_PERSON) as? android.app.Person)?.name?.toString()
         val messages = readMessagingStyle(extras)
         val newMessages = if (messages.isNotEmpty()) {
-            val since = synchronized(lastSeen) { lastSeen[key] ?: (System.currentTimeMillis() - 10 * 60_000L) }
+            val since = synchronized(lastSeen) { lastSeen.getLong(seenKey(key), System.currentTimeMillis() - 10 * 60_000L) }
             messages.filter { it.time > since }.also { fresh ->
-                fresh.maxOfOrNull { it.time }?.let { t -> synchronized(lastSeen) { lastSeen[key] = t } }
+                fresh.maxOfOrNull { it.time }?.let { t -> synchronized(lastSeen) { lastSeen.edit().putLong(seenKey(key), t).apply() } }
             }
         } else {
             // Apps without MessagingStyle (e.g. Gmail): one message = the notification text
             val body = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))
                 ?.toString() ?: return
-            listOf(Msg(body, title, sbn.postTime))
+            listOf(Msg(body, title, sbn.postTime, fromSelf = false))
         }
 
         for (m in newMessages) {
             if (m.text.isBlank() || systemText.containsMatchIn(m.text.trim())) continue
+            val mine = m.fromSelf || (selfName != null && m.sender == selfName)
             val msg = ChatMessage(
                 text = m.text,
                 app = app,
-                outgoing = false,
+                outgoing = mine,
                 chatName = chatName,
-                sender = if (isGroup) m.sender else chatName,
+                sender = if (mine) null else if (isGroup) m.sender else chatName,
                 isGroup = isGroup
             )
             scope.launch { processor.process(msg) }
         }
     }
 
-    private data class Msg(val text: String, val sender: String?, val time: Long)
+    /** [fromSelf]: MessagingStyle marks the owner's own messages with no sender. */
+    private data class Msg(val text: String, val sender: String?, val time: Long, val fromSelf: Boolean)
 
     /** Reads Notification.MessagingStyle messages (text, sender, time) from the extras. */
     private fun readMessagingStyle(extras: Bundle): List<Msg> {
@@ -121,9 +130,9 @@ class NotificationListener : NotificationListenerService() {
         return parcels.mapNotNull { p ->
             val b = p as? Bundle ?: return@mapNotNull null
             val text = b.getCharSequence("text")?.toString() ?: return@mapNotNull null
-            val sender = b.getCharSequence("sender")?.toString()
-                ?: (b.get("sender_person") as? android.app.Person)?.name?.toString()
-            Msg(text, sender, b.getLong("time"))
+            val person = b.get("sender_person") as? android.app.Person
+            val sender = b.getCharSequence("sender")?.toString() ?: person?.name?.toString()
+            Msg(text, sender, b.getLong("time"), fromSelf = b.getCharSequence("sender") == null && person == null)
         }
     }
 

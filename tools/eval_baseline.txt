@@ -6,3 +6,4 @@ FAIL  bare_acceptance  (43s)
       unexpected '📌': 📌 Call Dadaji back · no deadline said (AI) — You promised to call Dadaji back.
 PASS  money_deadline  (43s)
 PASS  burst_then_change  (108s)
+PASS  lab_record  (43s)
