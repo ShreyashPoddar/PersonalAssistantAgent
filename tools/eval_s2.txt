@@ -1,2 +1,5 @@
 PASS  hinglish_two_tasks  (53s)
 PASS  ad_ignored  (40s)
+FAIL  suggestion_not_task  (47s)
+      unexpected '📌': 📌 Call Aman · no deadline said (AI) — Aman requested a call.
+PASS  group_mention_compact_time  (46s)

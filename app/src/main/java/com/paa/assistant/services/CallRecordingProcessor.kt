@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.database.ContentObserver
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -131,9 +132,15 @@ class CallRecordingProcessor @Inject constructor(
     /** Decodes the recording (AAC etc.) to 16 kHz mono PCM and runs it through the Hindi model. */
     /** Decodes to 16 kHz mono, then transcribes 4 slices in parallel (~3× faster on the phone's cores). */
     private suspend fun transcribe(uri: Uri): String {
-        val model = VoskEngine(context).loadHindiModel() ?: return ""
         val pcm = decodeToPcm16k(uri)
         if (pcm.isEmpty()) return ""
+        // Android's own on-device recognizer (Hindi pack) is far more accurate than Vosk-small; Vosk is the fallback
+        transcribeWithAndroid(pcm)?.takeIf { it.isNotBlank() }?.let {
+            android.util.Log.i(TAG, "Recording transcribed with Android on-device recognizer")
+            return it
+        }
+        android.util.Log.i(TAG, "Recording transcribed with Vosk")
+        val model = VoskEngine(context).loadHindiModel() ?: return ""
         // All cores only while charging; on battery leave room for the rest of the phone
         val slices = slicesAtPauses(pcm, if (charging()) PARALLEL else 2)
         return kotlinx.coroutines.coroutineScope {
@@ -152,6 +159,76 @@ class CallRecordingProcessor @Inject constructor(
                 }
             }.awaitAll().joinToString(". ")
         }.replace(Regex("(\\.\\s*){2,}"), ". ").trim()
+    }
+
+    /**
+     * Feeds the recording to Android's on-device speech recognizer (API 33+) through a pipe, in
+     * segmented mode for long audio. Returns null if unsupported / the Hindi pack is missing (then asks
+     * Android to download it for next time).
+     */
+    private suspend fun transcribeWithAndroid(pcm: ShortArray): String? {
+        if (android.os.Build.VERSION.SDK_INT < 33) return null
+        if (!android.speech.SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) return null
+        val (read, write) = android.os.ParcelFileDescriptor.createPipe()
+        val text = StringBuilder()
+        val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_AUDIO_SOURCE, read)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_SEGMENTED_SESSION, android.speech.RecognizerIntent.EXTRA_AUDIO_SOURCE)
+        // Writer: the whole recording, then end-of-stream
+        Thread {
+            runCatching {
+                android.os.ParcelFileDescriptor.AutoCloseOutputStream(write).use { out ->
+                    val bytes = java.nio.ByteBuffer.allocate(pcm.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    bytes.asShortBuffer().put(pcm)
+                    out.write(bytes.array())
+                }
+            }
+        }.start()
+        val timeoutMs = pcm.size / 16L * 2 + 60_000  // up to 2× real time + a minute
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            withContext(Dispatchers.Main) {
+                val recognizer = android.speech.SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                try {
+                    kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                        recognizer.setRecognitionListener(object : android.speech.RecognitionListener {
+                            override fun onSegmentResults(b: android.os.Bundle) {
+                                b.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                                    ?.let { text.append(it).append(". ") }
+                            }
+                            override fun onEndOfSegmentedSession() { if (cont.isActive) cont.resume(text.toString().trim()) {} }
+                            override fun onResults(b: android.os.Bundle?) {
+                                b?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { text.append(it) }
+                                if (cont.isActive) cont.resume(text.toString().trim()) {}
+                            }
+                            override fun onError(error: Int) {
+                                if (error == android.speech.SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
+                                    error == android.speech.SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED) {
+                                    runCatching { recognizer.triggerModelDownload(intent) }
+                                    DetectionLog.add("system", "Call recordings", "⬇️ asked Android for its Hindi speech pack (better call transcripts next time)")
+                                }
+                                if (cont.isActive) cont.resume(text.toString().trim().ifBlank { null }) {}
+                            }
+                            override fun onReadyForSpeech(p: android.os.Bundle?) {}
+                            override fun onBeginningOfSpeech() {}
+                            override fun onRmsChanged(v: Float) {}
+                            override fun onBufferReceived(b: ByteArray?) {}
+                            override fun onEndOfSpeech() {}
+                            override fun onPartialResults(p: android.os.Bundle?) {}
+                            override fun onEvent(t: Int, p: android.os.Bundle?) {}
+                        })
+                        recognizer.startListening(intent)
+                    }
+                } finally {
+                    recognizer.destroy()
+                    runCatching { read.close() }
+                }
+            }
+        }
     }
 
     /** Whole recording as 16 kHz mono samples (a 5-minute call is ~10 MB). */
