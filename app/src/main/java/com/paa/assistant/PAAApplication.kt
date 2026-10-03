@@ -62,6 +62,13 @@ class PAAApplication : Application(), Configuration.Provider {
             morningWork
         )
 
+        // Nudges for overdue chat tasks (the worker itself stays quiet outside 07:00–19:00)
+        workManager.enqueueUniquePeriodicWork(
+            "paa_followups",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<com.paa.assistant.workers.FollowUpWorker>(2, TimeUnit.HOURS).build()
+        )
+
         val eveningDelay = calculateInitialDelay(21, 0)
         val eveningWork = PeriodicWorkRequestBuilder<EveningRetrospectiveWorker>(24, TimeUnit.HOURS)
             .setInitialDelay(eveningDelay, TimeUnit.MILLISECONDS)
