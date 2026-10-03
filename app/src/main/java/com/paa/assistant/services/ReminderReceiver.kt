@@ -38,7 +38,10 @@ class ReminderReceiver : BroadcastReceiver() {
             try {
                 val task = AppDatabase.getInstance(context).taskDao().getById(taskId)
                 if (task != null && task.status == "PENDING") {
-                    ReminderNotifier.showReminder(context, taskId, task.title.ifBlank { title }, kind, due)
+                    // "Call me" tasks ring like a phone call at the deadline (inside the ringing window)
+                    val called = kind != ReminderScheduler.KIND_EARLY && PaaCallService.TAG_CALL_ME in task.tags &&
+                        ReminderScheduler.isRingTime() && PaaCallService.ring(context, taskId, task.title)
+                    if (!called) ReminderNotifier.showReminder(context, taskId, task.title.ifBlank { title }, kind, due)
                 }
             } finally {
                 pendingResult.finish()

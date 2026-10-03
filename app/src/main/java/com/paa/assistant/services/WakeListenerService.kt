@@ -348,6 +348,7 @@ class WakeListenerService : Service() {
     }
 
     private fun inCall(): Boolean {
+        if (PaaCallService.current != null) return false  // PAA's own reminder call isn't a conversation to schedule
         val mode = getSystemService(AudioManager::class.java).mode
         return mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION
     }

@@ -33,4 +33,10 @@ class SendMessageTest {
         assertEquals("+919876543210", ContactResolver.toE164("098765 43210"))
         assertEquals("+919876543210", ContactResolver.toE164("+91 98765-43210"))
     }
+
+    @Test fun `call me reminders are tagged`() {
+        org.junit.Assert.assertTrue("#callme" in parser.parse("call me at 5 pm to remind me about the project").tags)
+        org.junit.Assert.assertTrue("#callme" in parser.parse("remind me by call at 6 pm to submit the form").tags)
+        org.junit.Assert.assertTrue("#callme" !in parser.parse("remind me to call mom at 5 pm").tags)
+    }
 }

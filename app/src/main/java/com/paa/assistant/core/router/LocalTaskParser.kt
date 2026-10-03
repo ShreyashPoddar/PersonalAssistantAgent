@@ -625,6 +625,8 @@ class LocalTaskParser @Inject constructor() {
 
     private fun extractTags(norm: String): List<String> {
         val tags = mutableListOf<String>()
+        // "call me at 5 to remind me…", "remind me by call", "phone karke yaad dilana" → PAA rings like a call
+        if (Regex("\\bcall me\\b|by (a )?call|phone (kar|kr)(ke|ke)|call (kar|kr)(ke|ke) yaad").containsMatchIn(norm)) tags.add("#callme")
         if (norm.contains("call") || norm.contains("meeting") || norm.contains("email") || norm.contains("client") || norm.contains("assignment") || norm.contains("homework") || norm.contains("project")) tags.add("#work")
         if (norm.contains("buy") || norm.contains("shop") || norm.contains("grocery") || norm.contains("store")) tags.add("#shopping")
         if (norm.contains("doctor") || norm.contains("dentist") || norm.contains("medicine") || norm.contains("hospital")) tags.add("#health")
