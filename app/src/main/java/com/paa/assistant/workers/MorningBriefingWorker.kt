@@ -11,9 +11,6 @@ import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.paa.assistant.core.ai.GeminiClient
-import com.paa.assistant.core.privacy.PrivacyGuard
-import com.paa.assistant.core.ai.PromptTemplates
 import com.paa.assistant.core.calendar.CalendarManager
 import com.paa.assistant.data.db.AppDatabase
 import com.paa.assistant.ui.main.MainActivity
@@ -29,34 +26,22 @@ import java.util.Locale
 /**
  * MorningBriefingWorker — generates a proactive morning agenda summary at 7:00 AM.
  * Evaluates today's pending tasks, overdue items, calendar events, and synthesizes
- * an energetic executive briefing with Gemini 3.6 Flash.
+ * a briefing and a time plan with the on-device model (all tasks, nothing leaves the phone).
  */
 @HiltWorker
 class MorningBriefingWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted workerParams: WorkerParameters,
     private val database: AppDatabase,
-    private val geminiClient: GeminiClient,
-    private val promptTemplates: PromptTemplates,
-    private val calendarManager: CalendarManager
+    private val calendarManager: CalendarManager,
+    private val localExecutor: com.paa.assistant.core.router.LocalCommandExecutor
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val overdue = database.taskDao().getOverdueTasks()
             val allUpcoming = database.taskDao().getNextTasks(limit = 10)
-            // Chat-derived tasks never leave the device; Gemini only learns how many there are
-            val upcoming = PrivacyGuard.cloudSafe(allUpcoming)
-            val privateCount = allUpcoming.size - upcoming.size
             val calendarEvents = calendarManager.getTodayEvents()
-
-            val taskSummary = if (upcoming.isNotEmpty()) {
-                upcoming.joinToString("; ") { task ->
-                    task.title + (task.dueTimestamp?.let { " (at ${SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(it))})" } ?: "")
-                }
-            } else {
-                "No pending tasks."
-            } + if (privateCount > 0) " Plus $privateCount private task(s) from chats (details withheld)." else ""
 
             val calendarSummary = if (calendarEvents.isNotEmpty()) {
                 calendarEvents.joinToString("; ") { event ->
@@ -66,19 +51,12 @@ class MorningBriefingWorker @AssistedInject constructor(
                 "No calendar events today."
             }
 
-            var summary: String
-            try {
-                val prompt = promptTemplates.buildMorningBriefingPrompt(
-                    taskSummary = taskSummary,
-                    calendarSummary = calendarSummary
-                )
-                val geminiResponse = geminiClient.sendTextQuery(prompt)
-                summary = geminiResponse.spokenText.ifBlank {
-                    buildFallbackSummary(overdue.size, upcoming.size)
-                }
-            } catch (e: Exception) {
-                Log.w("MorningBriefingWorker", "Gemini synthesis failed, using local summary", e)
-                summary = buildFallbackSummary(overdue.size, upcoming.size)
+            // Planned on the phone (Gemma) with ALL tasks incl. private chat ones; nothing goes to the cloud
+            val plan = runCatching { localExecutor.planTasks(null) }.getOrNull()
+            val summary = buildString {
+                append(buildFallbackSummary(overdue.size, allUpcoming.size))
+                if (calendarEvents.isNotEmpty()) append("\nCalendar: ").append(calendarSummary)
+                if (!plan.isNullOrBlank() && !plan.startsWith("Nothing")) append("\n\n").append(plan)
             }
 
             postBriefingNotification("☀️ Morning Executive Briefing", summary)
