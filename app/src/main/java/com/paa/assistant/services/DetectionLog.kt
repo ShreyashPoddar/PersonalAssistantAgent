@@ -18,7 +18,7 @@ import java.io.File
 object DetectionLog {
     data class Entry(val time: Long, val source: String, val snippet: String, val result: String)
 
-    private const val MAX = 40
+    private const val MAX = 200
     private const val FILE = "detection_log.enc"
     /** Plaintext file from before encryption; converted once, then deleted. */
     private const val OLD_FILE = "detection_log.json"

@@ -1,0 +1,48 @@
+<start_of_turn>user
+Now: Monday, 2026-10-12 21:05
+Owner: Shreyash or Shreyas, batch 2028
+Source: received in group "Project Group" from Rohit
+Earlier:
+- Aman: ppt done?
+- Rohit: 'almost' final
+Message: "@shreyash bring the projector at 1145"<end_of_turn>
+<start_of_turn>model
+
+=====
+<start_of_turn>user
+Now: Monday, 2026-10-12 21:05
+Owner: Shreyash or Shreyas, batch 2028
+Source: new lines of chat "Zoya", oldest first, 'You' is the owner
+Open tasks:
+1. Send essay to Zoya (kal)
+Message: "You: haan
+Zoya: parso tak
+Zoya: 11 baje se pehle"<end_of_turn>
+<start_of_turn>model
+
+=====
+<start_of_turn>user
+Now: Monday, 2026-10-12 21:05
+Owner: Shreyash or Shreyas, batch 2028
+Source: sent by the owner to Papa
+Owner's past judgements:
+- "ok" -> not a task
+- "send it" -> task: Send the file
+Message: "kal bhej dunga"<end_of_turn>
+<start_of_turn>model
+
+=====
+<start_of_turn>user
+Now: Monday, 2026-10-12 21:05
+Owner: Shreyash or Shreyas, batch 2028
+Source: call transcript (both speakers mixed, may have recognition errors)
+Message: "so tum kal tak form bhar dena"<end_of_turn>
+<start_of_turn>model
+
+=====
+<start_of_turn>user
+Now: Monday, 2026-10-12 21:05
+Owner: Shreyash or Shreyas, batch 2028
+Source: received
+Message: "hi"<end_of_turn>
+<start_of_turn>model

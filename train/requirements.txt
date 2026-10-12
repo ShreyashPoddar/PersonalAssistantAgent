@@ -1,0 +1,6 @@
+# GPU steps (gen_data / train / eval). vllm pulls the torch build it needs; install it first.
+vllm>=0.10
+transformers>=4.56
+accelerate>=1.0
+huggingface_hub>=0.34
+pyyaml

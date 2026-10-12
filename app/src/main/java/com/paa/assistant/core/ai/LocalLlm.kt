@@ -168,7 +168,11 @@ class LocalLlm @Inject constructor(
          * Prompt within [PROMPT_BUDGET] tokens: drops the owner's ✓/✗ examples first, then older chat lines,
          * then open tasks beyond 4, and finally cuts the start of a long message (calls).
          */
-        internal fun fitPrompt(message: String, ctx: ChatContext, count: (String) -> Int): String {
+        internal fun fitPrompt(
+            message: String, ctx: ChatContext,
+            build: (String, ChatContext) -> String = ::buildChatPrompt,
+            count: (String) -> Int
+        ): String {
             var c = ctx
             var m = message
             val steps = listOf<() -> Boolean>(
@@ -177,14 +181,14 @@ class LocalLlm @Inject constructor(
                 { (c.openTasks.size > 4).also { c = c.copy(openTasks = c.openTasks.take(4)) } },
                 { (c.recentMessages.isNotEmpty()).also { c = c.copy(recentMessages = emptyList()) } },
             )
-            var prompt = buildChatPrompt(m, c)
+            var prompt = build(m, c)
             for (step in steps) {
                 if (count(prompt) <= PROMPT_BUDGET) return prompt
-                if (step()) prompt = buildChatPrompt(m, c)
+                if (step()) prompt = build(m, c)
             }
             while (count(prompt) > PROMPT_BUDGET && m.length > 200) {
                 m = m.takeLast(m.length * 3 / 4)
-                prompt = buildChatPrompt(m, c)
+                prompt = build(m, c)
             }
             return prompt
         }
@@ -222,6 +226,42 @@ $history$open$learned
 ${if (ctx.burst) "Messages" else "Message"}: "${message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'").let { if (ctx.burst) it else it.replace("\n", " ") }}"
 JSON:"""
         }
+
+        /**
+         * Prompt for PAA's own fine-tuned model (train/, file name paa-*.task): it learned the rules, so only the
+         * facts are sent (~150 tokens instead of ~750). MUST match train/paa_format.py build_prompt + wrap —
+         * CompactPromptTest checks this against train/golden_prompt.txt.
+         */
+        internal fun buildCompactPrompt(message: String, ctx: ChatContext, now: Date = Date()): String {
+            fun clean(s: String) = s.take(200).replace("\"", "'").replace("\n", " ")
+            val chat = ctx.chatName ?: "?"
+            val names = UserProfile.names.joinToString(" or ") { it.replaceFirstChar(Char::uppercase) }
+            val lines = mutableListOf(
+                "Now: " + SimpleDateFormat("EEEE, yyyy-MM-dd HH:mm", Locale.ENGLISH).format(now),
+                "Owner: $names, batch ${UserProfile.GRADUATION_YEAR}"
+            )
+            lines += "Source: " + when {
+                ctx.isCall -> "call transcript (both speakers mixed, may have recognition errors)"
+                ctx.burst -> "new lines of chat \"$chat\"" + (if (ctx.isGroup) " (group)" else "") + ", oldest first, 'You' is the owner"
+                ctx.outgoing -> "sent by the owner" + (ctx.chatName?.let { " to $it" } ?: "")
+                ctx.isGroup -> "received in group \"$chat\"" + (ctx.sender?.let { " from $it" } ?: "")
+                else -> "received" + ((ctx.sender ?: ctx.chatName)?.let { " from $it" } ?: "")
+            }
+            val recent = ctx.recentMessages.takeLast(8)
+            if (recent.isNotEmpty()) { lines += "Earlier:"; lines += recent.map { "- " + clean(it) } }
+            if (ctx.openTasks.isNotEmpty()) { lines += "Open tasks:"; lines += ctx.openTasks.mapIndexed { i, t -> "${i + 1}. ${clean(t)}" } }
+            if (ctx.learnedExamples.isNotEmpty()) {
+                lines += "Owner's past judgements:"
+                lines += ctx.learnedExamples.map { (m, t) -> "- \"${clean(m)}\" -> " + (t?.let { "task: $it" } ?: "not a task") }
+            }
+            var msg = message.take(if (ctx.isCall || ctx.burst) 1400 else 800).replace("\"", "'")
+            if (!ctx.burst) msg = msg.replace("\n", " ")
+            lines += "Message: \"$msg\""
+            return wrapTurn(lines.joinToString("\n"))
+        }
+
+        /** Gemma chat turn; the fine-tuned model was trained on exactly this (MediaPipe adds <bos>). */
+        internal fun wrapTurn(prompt: String) = "<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
 
         /**
          * The fixed part of the chat prompt: identical on every call, so it comes FIRST — the engine can
@@ -348,7 +388,9 @@ Message (sent): "I already submitted it lol"
                     kotlinx.coroutines.withTimeout(if (ctx.isCall) 2 * INFERENCE_TIMEOUT_MS else INFERENCE_TIMEOUT_MS) {
                         val llm = engine ?: createEngine().also { engine = it }
                         scheduleRelease()
-                        ask(llm, fitPrompt(message.take(1500), ctx) { runCatching { llm.sizeInTokens(it) }.getOrDefault(it.length / 3) }, prefix = chatPromptPrefix())
+                        val count = { p: String -> runCatching { llm.sizeInTokens(p) }.getOrDefault(p.length / 3) }
+                        if (usesCompactPrompt()) ask(llm, fitPrompt(message.take(1500), ctx, { m, c -> buildCompactPrompt(m, c) }, count))
+                        else ask(llm, fitPrompt(message.take(1500), ctx, count = count), prefix = chatPromptPrefix())
                     }
                 }
                 parseVerdict(raw)
@@ -373,6 +415,11 @@ Message (sent): "I already submitted it lol"
     }
 
     /** True if the installed model file is a valid .task bundle (not e.g. a leftover .tar.gz). */
+    /** Marker next to the model: it is PAA's fine-tuned model (adb install: also push an empty local_model.task.paa). */
+    private val compactMarker: File get() = File(modelFile.parentFile, "$MODEL_FILE_NAME.paa")
+
+    fun usesCompactPrompt(): Boolean = compactMarker.exists()
+
     fun installedModelLooksValid(): Boolean = isAvailable() && runCatching { isZip(modelFile) }.getOrDefault(false)
 
     /**
@@ -415,6 +462,8 @@ Message (sent): "I already submitted it lol"
                 }
                 modelFile.delete()
                 tmp.renameTo(modelFile)
+                // PAA's own fine-tuned models (train/) are named paa-*.task and expect the compact prompt
+                if (name.startsWith("paa-", ignoreCase = true)) compactMarker.createNewFile() else compactMarker.delete()
                 null
             }
         } catch (e: java.io.EOFException) {

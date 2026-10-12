@@ -32,7 +32,7 @@ class PromptBudgetTest {
 
     @Test fun `long call transcript is cut to fit`() {
         val long = "baat ".repeat(2000)
-        val p = LocalLlm.fitPrompt(long, ctx.copy(isCall = true), count)
+        val p = LocalLlm.fitPrompt(long, ctx.copy(isCall = true), count = count)
         assertTrue(count(p) <= LocalLlm.PROMPT_BUDGET)
         assertEquals(true, p.contains("baat"))
     }

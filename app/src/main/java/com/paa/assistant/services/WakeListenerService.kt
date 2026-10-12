@@ -105,7 +105,16 @@ class WakeListenerService : Service() {
         }
         if (intent?.action == ACTION_RESUME) {
             popupOpen = false
-            restartLater(800)
+            // After PAA's own call, Android keeps the call audio mode for a moment; a recorder opened then hears nothing
+            val am = getSystemService(AudioManager::class.java)
+            resumeJob?.cancel()
+            resumeJob = scope.launch {
+                stopListening()
+                var waited = 0
+                while (am.mode != AudioManager.MODE_NORMAL && waited < 15_000) { delay(500); waited += 500 }
+                delay(800)
+                if (isEnabled(this@WakeListenerService) && !popupOpen) startListening()
+            }
             return START_STICKY
         }
         if (intent?.action == ACTION_STOP) {
@@ -192,7 +201,13 @@ class WakeListenerService : Service() {
             try {
                 while (!Thread.currentThread().isInterrupted) {
                     val n = record.read(buf, 0, buf.size)
-                    if (n <= 0) { if (n < 0) break else continue }
+                    if (n < 0) {
+                        // The mic was taken away (call, recognizer); without a restart the listener stays deaf
+                        Log.w(TAG, "mic read error $n, restarting")
+                        scope.launch { restartLater(2_000) }
+                        break
+                    }
+                    if (n == 0) continue
                     for (i in 0 until n) { tail[tailPos] = buf[i]; tailPos = (tailPos + 1) % tail.size; if (tailPos == 0) tailFull = true }
                     verifying?.let { v ->
                         val take = minOf(n, v.size - verifyFill)

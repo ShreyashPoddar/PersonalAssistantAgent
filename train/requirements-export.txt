@@ -1,0 +1,5 @@
+# export step (CPU). Separate venv: ai-edge-torch pins its own torch / tensorflow versions.
+ai-edge-torch>=0.6
+mediapipe>=0.10.21
+huggingface_hub>=0.34
+transformers>=4.56

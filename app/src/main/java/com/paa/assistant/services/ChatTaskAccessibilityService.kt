@@ -42,6 +42,8 @@ class ChatTaskAccessibilityService : AccessibilityService() {
     }
     private var openChat: String? = null
     private var lastScan = 0L
+    private var trailingScan = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     override fun onDestroy() {
         running = null
@@ -88,7 +90,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                 val id = event.source?.viewIdResourceName.orEmpty()
                 val desc = event.contentDescription?.toString().orEmpty()
-                if ((id.endsWith(":id/send") || desc.equals("Send", ignoreCase = true)) && draft.length >= 3 && draftPackage == pkg) {
+                if ((id.endsWith(":id/send") || id.endsWith(":id/conversation_entry_action_button") || id.endsWith(":id/send_container") || desc.equals("Send", ignoreCase = true)) && draft.length >= 3 && draftPackage == pkg) {
                     onSent(draft, app)
                     draft = ""
                 }
@@ -108,7 +110,8 @@ class ChatTaskAccessibilityService : AccessibilityService() {
         if (!chat.equals(p.chat, ignoreCase = true) && !chat.contains(p.chat, ignoreCase = true) && !p.chat.contains(chat, ignoreCase = true)) return
         val box = root.findAccessibilityNodeInfosByViewId("$pkg:id/entry")?.firstOrNull()
         if (box?.text?.toString()?.trim() != p.text.trim()) return
-        val send = root.findAccessibilityNodeInfosByViewId("$pkg:id/send")?.firstOrNull() ?: return
+        // Newer WhatsApp: the mic button turns into Send (conversation_entry_action_button) once text is typed
+        val send = SEND_IDS.firstNotNullOfOrNull { root.findAccessibilityNodeInfosByViewId("$pkg:id/$it")?.firstOrNull() } ?: return
         pendingSend = null
         send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
@@ -134,11 +137,16 @@ class ChatTaskAccessibilityService : AccessibilityService() {
     /** Reads new incoming messages from the open WhatsApp chat (no notification is posted for them). */
     private fun scanOpenChat(pkg: String) {
         val now = System.currentTimeMillis()
-        if (now - lastScan < 800) return
+        if (now - lastScan < 800) {
+            // Throttled: still look once more when the burst settles, or its last message is missed
+            if (!trailingScan) { trailingScan = true; handler.postDelayed({ trailingScan = false; scanOpenChat(pkg) }, 900) }
+            return
+        }
         lastScan = now
 
         val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
-        val chat = findText(root, "$pkg:id/conversation_contact_name") ?: return  // not in a chat
+        // Left the chat: coming back must count as opening it again (messages that came meanwhile are new)
+        val chat = findText(root, "$pkg:id/conversation_contact_name") ?: run { if (root.packageName == pkg) openChat = null; return }
         val bubbles = root.findAccessibilityNodeInfosByViewId("$pkg:id/message_text") ?: return
         val firstLook = chat != openChat
         openChat = chat
@@ -150,20 +158,25 @@ class ChatTaskAccessibilityService : AccessibilityService() {
         val isGroup = root.findAccessibilityNodeInfosByViewId("$pkg:id/name_in_group_tv")?.isNotEmpty() == true
 
         val allTexts = bubbles.mapNotNull { it.text?.toString()?.trim() }
-        for (node in bubbles.takeLast(if (firstLook) 10 else 6)) {
+        for (node in if (firstLook) bubbles else bubbles.takeLast(8)) {
             val text = node.text?.toString()?.trim() ?: continue
             val bubble = node.parent?.parent ?: node.parent ?: continue
             val key = "$chat|$text"
             if (seen.containsKey(key)) continue
             seen[key] = true
-            // Sent-tick marker = our own message (handled by onSent)
-            if (bubble.findAccessibilityNodeInfosByViewId("$pkg:id/status")?.isNotEmpty() == true) continue
-            // Only messages that just arrived
+            val mine = bubble.findAccessibilityNodeInfosByViewId("$pkg:id/status")?.isNotEmpty() == true
+            // Only messages that just arrived (or that came while the chat was closed)
             val time = findText(bubble, "$pkg:id/date")?.let(::parseClockTime) ?: continue
             if (time < since - 60_000L || time - now > 60_000L) continue
+            val context = allTexts.takeWhile { it != text }.takeLast(4)
+            if (mine) {
+                // Sent-tick marker = the owner's message: read from the bubble, however it was sent
+                val msg = ChatMessage(text, ChatApp.WHATSAPP, outgoing = true, chatName = chat, sender = null, isGroup = isGroup, recentMessages = context)
+                scope.launch { processor.process(msg) }
+                continue
+            }
 
             val sender = if (isGroup) findText(bubble, "$pkg:id/name_in_group_tv") else chat
-            val context = allTexts.takeWhile { it != text }.takeLast(4)
             val msg = ChatMessage(text, ChatApp.WHATSAPP, outgoing = false, chatName = chat, sender = sender, isGroup = isGroup, recentMessages = context)
             scope.launch { processor.process(msg) }
         }
@@ -194,16 +207,20 @@ class ChatTaskAccessibilityService : AccessibilityService() {
 
     /** "10:32 pm" / "22:32" (today) → timestamp. */
     private fun parseClockTime(s: String): Long? {
-        val clean = s.replace(' ', ' ').trim()
+        // WhatsApp writes "9:41 pm" with U+202F (narrow no-break space); SimpleDateFormat wants a plain space
+        val clean = s.replace(Regex("[\\s\u00A0\u202F\u2007]+"), " ").trim()
         for (pattern in listOf("h:mm a", "hh:mm a", "HH:mm")) {
             try {
                 val parsed = SimpleDateFormat(pattern, Locale.ENGLISH).parse(clean) ?: continue
                 val t = Calendar.getInstance().apply { time = parsed }
-                return Calendar.getInstance().apply {
+                val at = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, t.get(Calendar.HOUR_OF_DAY))
                     set(Calendar.MINUTE, t.get(Calendar.MINUTE))
                     set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+                // "11:58 pm" read just after midnight was yesterday
+                return if (at - System.currentTimeMillis() > 60 * 60_000L) at - 24 * 3_600_000L else at
             } catch (_: Exception) {}
         }
         return null
@@ -221,6 +238,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
             pendingSend = PendingSend(chat, text, System.currentTimeMillis() + 20_000)
         }
 
+        private val SEND_IDS = listOf("send", "conversation_entry_action_button", "send_container")
         private val CHAT_HEADER_IDS = listOf(
             "com.whatsapp:id/conversation_contact_name",
             "com.whatsapp.w4b:id/conversation_contact_name"
