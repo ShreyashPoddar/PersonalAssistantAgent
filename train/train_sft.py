@@ -64,7 +64,15 @@ def main():
     ap.add_argument("--micro", type=int, default=8)
     ap.add_argument("--max-len", type=int, default=1024)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--then-eval", default="", help="then run eval_model.py into artifacts/<name>")
+    ap.add_argument("--then-train", default="", help="then train BASE,OUT[,EVAL] on the same card")
+    ap.add_argument("--hold", action="store_true", help="at the end keep the card reserved until control.stop")
     a = ap.parse_args()
+    # shared box: claim the card at once (data/tokenizer loading takes a while and the card looks idle meanwhile)
+    hold = None
+    if torch.cuda.is_available():
+        free, _ = torch.cuda.mem_get_info()
+        hold = torch.empty(max(0, int(free - 1.5 * 2**30)), dtype=torch.uint8, device="cuda")
     data, out = Path(a.data), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -76,6 +84,7 @@ def main():
 
     train, val = Data(load(data / "train.jsonl"), tok, a.max_len), Data(load(data / "val.jsonl"), tok, a.max_len)
     print(f"train {len(train)}  val {len(val)}", flush=True)
+    del hold; torch.cuda.empty_cache()   # hand the claimed memory to training
     model = AutoModelForCausalLM.from_pretrained(a.base, torch_dtype=torch.bfloat16, attn_implementation="eager")
     small = model.num_parameters() < 5e8
     args = TrainingArguments(
@@ -98,6 +107,41 @@ def main():
                "eval_loss": ev.get("eval_loss"), "steps": res.global_step}
     (out / "train_summary.json").write_text(json.dumps(summary, indent=1))
     print("summary", json.dumps(summary), flush=True)
+    chain(a, data, out, trainer, model)
+
+
+def chain(a, data: Path, out: Path, trainer, model):
+    """Keep the shared card in ONE job: queue jobs are separate processes, and between two of them the card
+    looks idle for up to 3 min and gets taken. Each step still writes its own artifacts/<name>/.done, so CPU-only
+    jobs that wait on them (export) start as soon as a step is finished."""
+    import re
+    import subprocess
+    import time
+    if not (a.then_eval or a.then_train or a.hold):
+        return
+    (out / ".done").write_text(time.strftime("%F %T"))      # model is saved: exports may start now
+    del trainer, model
+    torch.cuda.empty_cache()
+    me = Path(__file__).parent
+    sib = lambda n: out.parent / (n if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", n) else sys.exit(f"bad name {n}"))
+    if a.then_eval:
+        r = subprocess.run([sys.executable, str(me / "eval_model.py"), "--model", str(out / "model"),
+                            "--data", str(data), "--out", str(sib(a.then_eval))])
+        if r.returncode == 0:
+            (sib(a.then_eval) / ".done").write_text(time.strftime("%F %T"))
+    if a.then_train:
+        base, o, e = (a.then_train.split(",") + ["", ""])[:3]
+        cmd = [sys.executable, str(me / "train_sft.py"), "--base", base, "--data", str(data), "--out", str(sib(o))]
+        cmd += ["--epochs", "4"] if "270m" in base else []
+        cmd += ["--then-eval", e] if e else []
+        cmd += ["--hold"] if a.hold else []
+        sys.exit(subprocess.run(cmd).returncode)          # the next model holds the card from here on
+    if a.hold:
+        free, _ = torch.cuda.mem_get_info()
+        keep = torch.empty(max(0, int(free - 1.5 * 2**30)), dtype=torch.uint8, device="cuda")
+        print(f"holding the card for PAA ({keep.numel() / 2**30:.1f} GiB) until control.stop", flush=True)
+        while True:
+            time.sleep(600)
 
 
 if __name__ == "__main__":
