@@ -147,7 +147,8 @@ while true; do
         continue
       fi
       # inputs missing here but backed up (box wiped, or produced elsewhere)? fetch them first
-      if [ -n "$after" ] && [ ! -f "$ART/$after/.done" ]; then
+      # only when the folder is absent here: restoring over a job that is still writing it would roll its output back
+      if [ -n "$after" ] && [ ! -d "$ART/$after" ]; then
         python "$HERE/hf_backup.py" restore "$ART" "$after" >> "$ROOT/backup.log" 2>&1 \
           && [ -f "$ART/$after/.done" ] && post "[PAA DGX] restored \`$after\` from Hugging Face for \`$id\`."
       fi
