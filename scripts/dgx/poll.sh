@@ -13,6 +13,7 @@
 #   jobs' code comes from)  PAA_QUEUE_REF (gpu-queue)  PAA_QUEUE_INTERVAL (180)  PAA_ISSUE (empty = don't post)
 #   PAA_HEARTBEAT (21600)  PAA_MAX_GPU_JOBS (1)  PAA_LEAVE_FREE (2)  PAA_HF_REPO  PAA_BACKUP_EVERY (1800)
 set -uo pipefail
+shopt -s nullglob   # empty jobs/ or artifacts/ must loop zero times, not over a literal "*"
 ROOT="${PAA_HOME:-$HOME/paa}"
 [ -f "$ROOT/secrets.env" ] && { set -a; . "$ROOT/secrets.env"; set +a; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -94,7 +95,7 @@ backups() {  # one upload at a time: finished outputs first, then state, then sm
   if [ -f "$ROOT/state_dirty" ]; then rm -f "$ROOT/state_dirty"; bg_backup state "$ROOT"; return; fi
   for d in "$ART"/*/; do
     [ -f "$d/.done" ] && continue
-    [ $(( now - $(cat "$d/.backup_at" 2>/dev/null || stat -c %Y "$d") )) -ge "$BKEVERY" ] || continue
+    [ $(( now - $(cat "$d/.backup_at" 2>/dev/null || stat -c %Y "$d" 2>/dev/null || echo "$now") )) -ge "$BKEVERY" ] || continue
     date +%s > "$d/.backup_at"; bg_backup partial "$ART" "$(basename "$d")"; return
   done
 }
@@ -113,7 +114,11 @@ check_token() {
 }
 
 echo "paa poller up: tools $TOOLS_SHA, $CSLUG@$QREF every ${INTERVAL}s, code $CODE, issue=${ISSUE:-none}"
-post "[PAA DGX] poller started (tools \`$TOOLS_SHA\`, polling \`$QREF/queue.yaml\` every ${INTERVAL}s)."
+# announce a start at most every 6 h (a crash loop restarted by cron must not flood the issue)
+if [ $(( $(date +%s) - $(cat "$ROOT/last_start_post" 2>/dev/null || echo 0) )) -ge 21600 ]; then
+  date +%s > "$ROOT/last_start_post"
+  post "[PAA DGX] poller started (tools \`$TOOLS_SHA\`, polling \`$QREF/queue.yaml\` every ${INTERVAL}s)."
+fi
 last_hb=$(date +%s)
 
 while true; do

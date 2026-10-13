@@ -8,6 +8,7 @@
 # GPU etiquette (the box is shared with LocalAI): only idle cards (<1 GiB used), highest index first (LocalAI's
 # launcher takes the lowest), and only if PAA_LEAVE_FREE idle cards remain for LocalAI afterwards.
 set -euo pipefail
+shopt -s nullglob
 ROOT="${PAA_HOME:-$HOME/paa}"
 ART="$ROOT/artifacts"
 LEAVE_FREE="${PAA_LEAVE_FREE:-2}"
