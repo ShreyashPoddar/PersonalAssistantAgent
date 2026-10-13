@@ -194,6 +194,18 @@ def sane(label: dict, prompt: str, n_open: int) -> str:
     return ""
 
 
+def hold_gpu():
+    """Shared box: between launch.sh picking an idle card and vLLM loading (minutes), the card still looks idle
+    and someone else can take it. Grab all but 1.5 GiB of it right away; released just before vLLM starts."""
+    import torch
+    if not torch.cuda.is_available():
+        return None
+    free, _ = torch.cuda.mem_get_info()
+    keep = int(free - 1.5 * 2**30)
+    print(f"claimed {max(keep, 0) / 2**30:.1f} GiB of the card until the teacher loads", flush=True)
+    return torch.empty(keep, dtype=torch.uint8, device="cuda") if keep > 0 else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=20000)
@@ -205,6 +217,7 @@ def main():
     ap.add_argument("--no-eager", dest="eager", action="store_false",
                     help="allow CUDA graphs / torch.compile (faster, but more ways to fail at start-up)")
     a = ap.parse_args()
+    hold = hold_gpu()   # first thing: claim the card before the slow imports, so nobody else takes it meanwhile
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     labeled = out / "labeled.jsonl"
     done = set()
@@ -224,6 +237,7 @@ def main():
         os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
         import torch
         from vllm import LLM, SamplingParams
+        del hold; torch.cuda.empty_cache()   # hand the claimed memory straight to vLLM
         free, total = torch.cuda.mem_get_info()
         print(f"gpu memory: {free / 2**30:.1f} GiB free of {total / 2**30:.1f} GiB", flush=True)
         # vLLM's fraction is of the WHOLE card and must fit in what is free now (a shared box: others may hold some)
