@@ -202,6 +202,8 @@ def main():
     ap.add_argument("--tp", type=int, default=1, help="GPUs for the teacher (tensor parallel)")
     ap.add_argument("--chunk", type=int, default=1024)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--no-eager", dest="eager", action="store_false",
+                    help="allow CUDA graphs / torch.compile (faster, but more ways to fail at start-up)")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     labeled = out / "labeled.jsonl"
@@ -216,8 +218,18 @@ def main():
     print(f"{len(done)} done, {len(todo)} to go, teacher {a.teacher}", flush=True)
 
     if todo:
+        import os
+        # engine in this process: a start-up failure then ends the log with its real cause (the queue posts
+        # only the last lines), instead of a generic "Engine core initialization failed" from a child process
+        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+        import torch
         from vllm import LLM, SamplingParams
-        llm = LLM(model=a.teacher, tensor_parallel_size=a.tp, max_model_len=4096, gpu_memory_utilization=0.88)
+        free, total = torch.cuda.mem_get_info()
+        print(f"gpu memory: {free / 2**30:.1f} GiB free of {total / 2**30:.1f} GiB", flush=True)
+        # vLLM's fraction is of the WHOLE card and must fit in what is free now (a shared box: others may hold some)
+        util = min(0.88, free / total - 0.04)
+        llm = LLM(model=a.teacher, tensor_parallel_size=a.tp, max_model_len=4096, gpu_memory_utilization=util,
+                  enforce_eager=a.eager)
         kw = {"chat_template_kwargs": {"enable_thinking": False}}   # Qwen3: no long thinking; others ignore it
         gen_sp = SamplingParams(temperature=0.95, top_p=0.95, max_tokens=700, seed=a.seed)
         greedy = SamplingParams(temperature=0, max_tokens=500)
