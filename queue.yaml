@@ -26,4 +26,4 @@ jobs:
   - {id: export-270m-v1, step: export, ref: 79253744f648, after: train-270m-v1, args: "--size 270m --tag v1"}
   - {id: data-v1b, step: gen_data, ref: 98b1c8cb07de, out: data-v1, resume: true, args: "--n 20000"}
   - {id: data-v1c, step: gen_data, ref: 3cadc921247e, out: data-v1, resume: true, args: "--n 20000"}
-control: {status: 3, logs: [data-v1b], stop: []}
+control: {status: 4, logs: [data-v1b], stop: []}
