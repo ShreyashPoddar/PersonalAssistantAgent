@@ -22,4 +22,4 @@ jobs:
   - {id: export-270m-v1, step: export, ref: 79253744f648, after: train-270m-v1, args: "--size 270m --tag v1"}
   - {id: data-v1b, step: gen_data, ref: 98b1c8cb07de, out: data-v1, resume: true, args: "--n 20000"}
   - {id: chain-v1, step: train, ref: 69feea047c9e, out: train-1b-v1, after: data-v1, args: "--base google/gemma-3-1b-it --then-eval eval-1b-v1 --then-train google/gemma-3-270m-it,train-270m-v1,eval-270m-v1 --hold"}
-control: {status: 4, logs: [data-v1b], stop: []}
+control: {status: 5, logs: [data-v1b], stop: []}
