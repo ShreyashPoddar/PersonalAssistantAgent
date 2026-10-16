@@ -1,5 +1,7 @@
 # PAA: automating the whole phone — design plan
 
+> **Superseded for platform decisions by `docs/PAA_SYSTEM_PLAN.md`** (built on the 2026-10-16 research). Kept for the reasoning.
+
 **Goal:** one assistant that runs the owner's phone: reads every app (mostly WhatsApp) and schedules real tasks,
 calls / messages / emails on the owner's behalf, orders food, groceries and shopping, alarms and wake-up calls,
 opens apps instantly, SOS, compares buses / trains / flights, understands every expense, answers any question
