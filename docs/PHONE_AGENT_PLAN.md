@@ -26,36 +26,54 @@ Related: `docs/MODEL_PLAN.md` (the on-device models), `PAA_MASTER_ARCHITECTURE_P
 
 ---
 
-## 2. The big decision: custom Android OS or agent on stock Android?
+## 2. Platform: a modified Android 15, and what "full Android security" really depends on
 
-### What a custom OS would really give
-| Gain | Why it matters |
-|---|---|
-| Privileged permissions (system app) | Read the *other side* of calls (`CAPTURE_AUDIO_OUTPUT`) — the wall we hit on the iQOO; inject input without accessibility; no background limits; never killed |
-| Own security hardening | Hardened memory allocator, stricter sandboxing, verified boot with our own keys |
-| No vendor interference | vivo's battery killer, OEM restrictions gone |
+The plan is to build **on top of Android 15** (not a new OS). The catch: Android's security does not come from
+its code alone. It comes from the **chain of trust**: the bootloader is *locked*, the chip checks that every boot
+image is signed by a trusted key (verified boot), and apps can ask the chip to prove that (hardware attestation —
+what banking / UPI apps check). Any change to the system partition needs an **unlocked** bootloader, and:
 
-### What blocks or costs it
-| Blocker | Detail |
-|---|---|
-| **This phone can't take it** | vivo / iQOO phones don't offer bootloader unlocking (check: Developer options → "OEM unlocking"; on vivo it is normally absent). No unlock = no custom OS, and exploiting the phone to force it is out. |
-| **Banking and UPI apps may refuse to run** | Custom OSes fail Google Play Integrity's "device integrity" check; many Indian bank / UPI apps (possibly Axis Mobile) then refuse to open. That breaks the expense and ordering goals. Must be tested before committing. |
-| **Security is a monthly job** | A fork is only as safe as its patches: every monthly Android security update must be merged, rebuilt, tested and flashed. A from-scratch fork maintained by one person ends up *less* secure than stock. |
-| **Hardware** | Practically only Google Pixels are good targets (unlockable *and* re-lockable with your own keys, full source). That means buying a Pixel. |
-| **Build machine** | An AOSP build needs ~400 GB disk and 64 GB RAM for hours; the DGX is shared and not for that. |
+- on the **iQOO**, the bootloader can (maybe) be unlocked but **not re-locked with our own keys** — only Google
+  Pixels (and a few others) support that. So a modified Android 15 on the iQOO runs permanently unlocked:
+  verified boot off, attestation says "unlocked", banking / UPI apps may refuse to run, and the phone is weaker
+  than stock against theft and malware. That is *less* than full Android security, whatever rules we add.
+- on a **Pixel**, a modified Android 15 can be re-locked with our keys → verified boot back on → full Android
+  security plus our own rules (this is exactly how GrapheneOS works).
 
-### Recommendation
-**Stage 1 (now, on the iQOO): PAA as a privileged agent app on stock Android 15.**
-Accessibility (screen reading + tapping) + notification access + **Shizuku** (ADB-level powers without root:
-instant app launch, input injection, granting permissions, screen capture without prompts) + deep links / intents
-+ on-device models. This covers ~85% of the list with no new phone and no banking breakage.
+"OEM unlocking" in Developer options only *permits* unlocking; on vivo the bootloader often still refuses.
+Non-destructive check (USB cable, nothing is erased): `adb reboot bootloader`, then
+`fastboot flashing get_unlock_ability` (1 = possible), then `fastboot reboot`. Actually unlocking **erases the phone**.
 
-**Stage 2 (only if Stage 1 hits walls that matter): "PAA OS" on a Pixel** — not a new OS, but **GrapheneOS
-(the most secure Android, already beyond stock and comparable to iOS) with PAA built in as a privileged system
-app**, re-based on every GrapheneOS release, bootloader re-locked with our own keys. Decide only after testing
-Axis Mobile + a UPI app on GrapheneOS.
+### The four paths
+| Path | What | Power for PAA | Security | Banking / UPI apps | Work |
+|---|---|---|---|---|---|
+| **A. Locked stock + privileged agent** (recommended on iQOO) | Stock Android 15, bootloader locked; PAA with accessibility + notification access + default-assistant role + **Shizuku** (shell-level powers: instant launch, input injection, permission grants, possibly call-audio capture) + optional device-owner mode | ~85–90% | Full stock Android security + PAA's own rules | Work | Low |
+| B. Unlocked iQOO + root + PAA as system app | KernelSU/Magisk module installs PAA as a privileged app on the stock OS | ~100% | Verified boot off, root on the phone | Likely blocked | Medium |
+| C. Unlocked iQOO + our own Android 15 build (GSI) | AOSP 15 generic system image with PAA built in, vivo's drivers underneath | ~100% | Verified boot off | Likely blocked; VoLTE / camera / fingerprint often break on MediaTek | High |
+| **D. Pixel + our Android 15 (GrapheneOS-based) re-locked** | PAA built in as a system app, our signing keys, re-based on every release | ~100% | Full Android security, hardened further (≥ stock) | Must be tested: not Google-certified, some apps refuse | High, ongoing |
 
-Building our own Android from scratch: **no** — slower, less secure, and it would never keep up with patches.
+### The banking / UPI problem and how we get around it
+1. **Don't depend on the bank app for reading money.** Every Axis debit/credit already arrives as an **SMS**;
+   statements arrive as **email PDFs**; UPI apps post **notifications**. PAA parses these on the phone → full
+   expense history with no bank app at all, on every path.
+2. **Keep the bootloader locked where payments happen** (path A, or D if its tests pass): banking and UPI apps
+   keep working and PAA drives them through confirmation screens (fingerprint + owner-typed UPI PIN).
+3. **Test before switching platforms:** Axis Mobile, BHIM / GPay / PhonePe and the shopping apps on the target
+   OS — a platform that breaks payments is ruled out.
+4. **Not used:** spoofing integrity / attestation checks. It breaks every few weeks, violates the banks' and
+   Google's terms, and would make PAA's core depend on a cat-and-mouse game.
+
+### What Path A still can't do, and the test that may fix it
+The wall we hit was **hearing the other side of a call** (normal apps are blocked). Shizuku runs PAA's helper as
+the *shell* user, which holds `CAPTURE_AUDIO_OUTPUT`; tools like scrcpy use this to record call audio on some
+phones. **Test on the iQOO:** a Shizuku helper recording `VOICE_DOWNLINK` during a call. If it works, live call
+understanding comes back with the phone still locked and banking intact. Speaking *into* a normal SIM call stays
+impossible without vendor audio access on any path → AI calls go through cloud telephony.
+
+### Decision
+**Path A now** — it is the only one that keeps full Android security *and* banking on this phone. Move to **Path D**
+only if A hits a wall that matters and the banking / UPI tests pass on a Pixel. Paths B and C trade away the
+security the plan is built on.
 
 ---
 
@@ -92,7 +110,7 @@ Building our own Android from scratch: **no** — slower, less secure, and it wo
 
 ## 4. Capabilities — how each one is built
 
-| Capability | Stage 1 (stock Android, iQOO) | Stage 2 adds | Difficulty | Today |
+| Capability | Path A (locked stock Android 15, iQOO) | Path D adds | Difficulty | Today |
 |---|---|---|---|---|
 | Read any app, schedule tasks | Notifications + accessibility screen reading + on-device models (`MODEL_PLAN.md`) | — | Medium | Working for WhatsApp/Telegram; models in training |
 | Open any app instantly | Fuzzy name → package, launched via Shizuku `am start` / launcher intent; no model involved | — | Easy | Partly (voice) |
@@ -155,7 +173,7 @@ All on-phone models trained on the DGX lane from synthetic data — real chats, 
 5. **Travel compare:** trains / buses / flights from the aggregators' sites, ranked by the owner's preferences.
 6. **Generic screen agent** for "anything else", plus turning repeated agent runs into fast scripted skills.
 7. **Intent model + adapters on the phone** so most commands never need the cloud.
-8. **Stage 2 decision:** test Axis Mobile and a UPI app on GrapheneOS on a Pixel; only then decide on PAA OS.
+8. **Platform check:** Shizuku call-audio test (path A); only if A hits a real wall, test banking / UPI on a Pixel with GrapheneOS before path D.
 
 Each step ships only when it passes its tests on the real phone.
 
@@ -172,6 +190,6 @@ Each step ships only when it passes its tests on the real phone.
   frequent tasks, not for brand-new ones.
 
 ## 9. Decisions only the owner can make
-- Buy a Pixel for Stage 2 (only after Stage 1 shows real walls).
+- Unlock the iQOO (erases it; not recommended) or buy a Pixel for path D (only after path A shows real walls).
 - Pay for cloud telephony for AI calls.
 - Per-contact rules for what PAA may send without asking.
