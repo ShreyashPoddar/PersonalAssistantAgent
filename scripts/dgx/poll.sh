@@ -76,14 +76,15 @@ stop_job() {
 sync_mirror() {
   [ -d "$MIRROR" ] || git init -q --bare "$MIRROR"
   [ -n "$GITHUB_TOKEN" ] || return 1
-  git --git-dir="$MIRROR" -c credential.helper= fetch -q \
+  # time limit: on 2026-10-13 a network drop left this fetch hanging for 3 days with the poller frozen behind it
+  timeout 300 git --git-dir="$MIRROR" -c credential.helper= fetch -q \
       "https://x-access-token:${GITHUB_TOKEN}@github.com/$CODE.git" "+refs/heads/main:refs/heads/main" 2>/dev/null
 }
 on_main() { git --git-dir="$MIRROR" merge-base --is-ancestor "$1" refs/heads/main 2>/dev/null; }
 
 BKPID="$ROOT/backup.pid"; BKEVERY="${PAA_BACKUP_EVERY:-1800}"
 backup_busy() { [ -f "$BKPID" ] && kill -0 "$(cat "$BKPID")" 2>/dev/null; }
-bg_backup() { ( python "$HERE/hf_backup.py" "$@" >> "$ROOT/backup.log" 2>&1 ) & echo $! > "$BKPID"; }
+bg_backup() { ( timeout 3600 python "$HERE/hf_backup.py" "$@" >> "$ROOT/backup.log" 2>&1 ) & echo $! > "$BKPID"; }
 
 backups() {  # one upload at a time: finished outputs first, then state, then small files of long-running jobs
   backup_busy && return
@@ -149,12 +150,12 @@ while true; do
       # inputs missing here but backed up (box wiped, or produced elsewhere)? fetch them first
       # only when the folder is absent here: restoring over a job that is still writing it would roll its output back
       if [ -n "$after" ] && [ ! -d "$ART/$after" ]; then
-        python "$HERE/hf_backup.py" restore "$ART" "$after" >> "$ROOT/backup.log" 2>&1 \
+        timeout 900 python "$HERE/hf_backup.py" restore "$ART" "$after" >> "$ROOT/backup.log" 2>&1 \
           && [ -f "$ART/$after/.done" ] && post "[PAA DGX] restored \`$after\` from Hugging Face for \`$id\`."
       fi
       # resuming into an output dir this box no longer has: bring back its partial backup
       if [ "$resume" = 1 ] && [ ! -d "$ART/$out" ]; then
-        python "$HERE/hf_backup.py" restore "$ART" "$out" >> "$ROOT/backup.log" 2>&1 || true
+        timeout 900 python "$HERE/hf_backup.py" restore "$ART" "$out" >> "$ROOT/backup.log" 2>&1 || true
       fi
       want=$gpus; [ -z "$want" ] && { [ "$step" = export ] && want=0 || want=1; }
       if [ "$want" -gt 0 ] && [ "$gpu_jobs" -ge "$MAXGPU" ]; then continue; fi
@@ -163,7 +164,7 @@ while true; do
       [ -n "$gpus" ] && largs+=(--gpus "$gpus")
       [ "$resume" = 1 ] && largs+=(--resume)
       read -ra extra <<< "$args"
-      out_txt=$(bash "$HERE/launch.sh" "${largs[@]}" -- "${extra[@]}" 2>&1); rc=$?
+      out_txt=$(timeout 300 bash "$HERE/launch.sh" "${largs[@]}" -- "${extra[@]}" 2>&1); rc=$?
       case "$rc" in
         0) echo "$id" >> "$STATE"; touch "$ROOT/state_dirty"
            [ "$want" -gt 0 ] && gpu_jobs=$((gpu_jobs + 1))
