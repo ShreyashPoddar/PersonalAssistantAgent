@@ -29,7 +29,7 @@ mkvenv "$ROOT/venv"
 mkvenv "$ROOT/venv-export"
 "$ROOT/venv-export/bin/pip" install -q -r "$TOOLS/train/requirements-export.txt"
 "$ROOT/venv/bin/python" -c 'import torch, vllm, transformers; print("gpu venv ok: torch", torch.__version__, "cuda", torch.cuda.is_available(), "vllm", vllm.__version__)'
-"$ROOT/venv-export/bin/python" -c 'import ai_edge_torch, mediapipe; print("export venv ok")'
+"$ROOT/venv-export/bin/python" -c 'import litert_torch, mediapipe; print("export venv ok")'
 
 [ -d "$ROOT/PAA.git" ] || git clone -q --bare https://github.com/ShreyashPoddar/PersonalAssistantAgent.git "$ROOT/PAA.git"
 
