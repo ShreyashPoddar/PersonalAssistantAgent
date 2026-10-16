@@ -40,7 +40,7 @@ the Phase-0 tests fail (then: stock Pixel 10a, locked — the fallback with the 
 │   :parse      isolated process — turns untrusted text into structured events            │
 │   :brain      on-device models — gate, task extractor, intent parser, expense classifier│
 │   :act        executor — typed, allow-listed actions only (the only part with powers)    │
-│   :guard      policy — owner-only orders, risk tiers, fingerprint, audit log, Bank Shield│
+│   :guard      policy — owner-only orders, risk tiers, fingerprint, audit log, kill switch │
 └──────────────┬───────────────────────────────────────┬──────────────────────────────────┘
                │ Bluetooth hands-free (calls)           │ LAN / private tunnel (encrypted)
 ┌──────────────▼─────────────────────┐   ┌──────────────▼───────────────┐   ┌───────────────┐
@@ -60,22 +60,23 @@ the Phase-0 tests fail (then: stock Pixel 10a, locked — the fallback with the 
 
 ---
 
-## 2. Bank Shield — the agent and banking apps on one phone
+## 2. Banking and the agent on one phone — owner-controlled, no evasion
 
-The single biggest risk found: Indian bank / UPI apps reportedly refuse to run while a third-party accessibility
-service, developer options, USB/wireless debugging or Shizuku is on (ICICI documents it; Axis reported refusing
-on 31 May 2026 while another app held accessibility; BHIM reported flagging Shizuku). Detection logic is not
-public. PAA's design therefore makes the bank apps see a **clean phone**, honestly — by switching PAA's powers off,
-not by hiding them.
+The biggest risk found: Indian bank / UPI apps reportedly refuse to run while a third-party accessibility service
+is on (ICICI documents it; Axis reported refusing on 31 May 2026; BHIM reported flagging Shizuku). Banks do this
+because accessibility is the main Android banking-fraud vector. **PAA respects that; it does not try to defeat it.**
+We do **not** build anything that detects when a bank app opens, hides PAA, or races the bank's launch check —
+that is circumventing a security control, even on your own phone, and we won't ship it. Instead, *you* decide when
+PAA may read the screen, and banking lives where PAA isn't.
 
 | Layer | What | Status |
 |---|---|---|
-| 1. Scope | Accessibility limited to named packages (`android:packageNames`: WhatsApp, Telegram, shopping apps) and needed event types; password and text-change events off where not needed | Partly (WhatsApp/Telegram already scoped) |
-| 2. No developer options in daily use | ADB used once to provision, then Developer options **off**. Shizuku is a provisioning tool, never a running service | New rule |
-| 3. **Auto-gating** | One-time `adb shell pm grant com.paa.assistant android.permission.WRITE_SECURE_SETTINGS`. PAA switches its own accessibility service **off** before any bank/UPI app comes to the front (PAA launches them itself when asked; Usage Access watches manual launches) and back **on** when you leave | To build + Test 11 |
-| 4. Payment hand-off | Shopping flow reaches the payment screen → PAA shows the exact summary → fingerprint → PAA switches itself off and opens the UPI app → **you type the PIN** → PAA comes back and reads the confirmation notification | To build |
-| 5. Profile split (fallback) | Bank apps in a work profile / secondary user where PAA's service isn't enabled (accessibility settings are per user) | Test 15 |
-| 6. Agent phone (last resort) | A cheap second phone, no banking apps, runs screen-driving; the main phone keeps banking + everything read-only | Only if 3 and 5 fail |
+| 1. Scope | Accessibility limited to named packages (`android:packageNames`: WhatsApp, Telegram, shopping apps); PAA is never enabled for bank apps | Partly (WhatsApp/Telegram already scoped) |
+| 2. Owner switch | One-tap tile / switch / voice ("banking mode") turns PAA's screen reading off before you bank and on after — visible and deliberate, never automatic | To build (P1-T6) |
+| 3. **Separate profile (recommended)** | Banking / UPI apps in a second user profile where PAA isn't installed; accessibility is per-profile, so PAA in the main profile never touches them | Test 15 / P0-T7 |
+| 4. Payment hand-off | Shopping flow reaches the payment screen → PAA shows the exact summary → fingerprint → **you** open the UPI app and type the PIN → PAA reads the confirmation notification afterwards. PAA never drives the bank/UPI app | To build |
+| 5. No developer options in daily use | ADB used once to provision, then Developer options off. Shizuku only for one-off grants, never left running | Rule |
+| 6. Agent phone (last resort) | A cheap second phone, no banking apps, runs screen-driving; the main phone keeps banking + everything read-only | Only if 3 can't be used |
 
 Also: ask Axis in writing whether they block third-party accessibility services and whether they allow-list any (Test 16).
 
@@ -96,7 +97,7 @@ Also: ask Axis in writing whether they block third-party accessibility services 
 | **AI talks on calls, your own number** | Hub as Bluetooth hands-free device (like a car kit): local speech-to-text → model → text-to-speech into the call; opens with an AI disclosure | Cloud number (Exotel/Plivo) + realtime voice when away; disclosure line | Tests 12, 8 | 4 |
 | Live call understanding (both sides) | Same hands-free bridge transcribes both directions on the hub | Shell call recording (`scrcpy`/ShizuCallRecorder style) if the chipset exposes it | Tests 12, 4 | 4 |
 | Order food (Swiggy, Instamart, Zomato) | **Official MCP servers** (OAuth, personal use allowed by Swiggy): search → cart → stop → your confirm → UPI | Accessibility in the app, stopping at payment | Test 13 | 3 |
-| Blinkit, Zepto, Amazon, Flipkart, Myntra | Accessibility-driven in the app, on command only, human pace, stops at payment (Bank Shield §2.4) | — | per-app flow tests | 3 |
+| Blinkit, Zepto, Amazon, Flipkart, Myntra | Accessibility-driven in the app, on command only, human pace, stops at payment (hand-off §2.4) | — | per-app flow tests | 3 |
 | Compare buses / trains / flights | PAA opens ixigo, redBus, MakeMyTrip, ConfirmTkt searches with your route/date and **reads** the result screens; ranks by your preferences (price, time, comfort, budget, past choices) | Ask a web model with search | per-app tests | 3 |
 | Book travel | PAA prepares; final booking taps on IRCTC are yours (automation banned there); others like orders, stopping at payment | — | — | 3 |
 | Read Axis transactions | Bank SMS + UPI-app notifications parsed on the phone (PennyWise-style parsers, tested on your own alerts) + Axis statement PDFs unlocked with a password you enter once (kept in Keystore) | — | Tests 5, 14 | 2 |
@@ -155,9 +156,9 @@ Private-by-default routing: voice commands are parsed on the phone first; the cl
 
 | # | Test | Who | Pass → | Fail → |
 |---|---|---|---|---|
-| 1 | Bank apps with PAA's accessibility on vs off (Axis, BHIM, GPay, PhonePe, Paytm) | you, I prepare the checklist | Bank Shield layer 1 is enough | layer 3 |
+| 1 | Bank apps with PAA's accessibility on vs off (Axis, BHIM, GPay, PhonePe, Paytm) | you, I prepare the checklist | banking stays in main profile | separate profile |
 | 10 | Same apps with Developer options off / on / wireless debugging / Shizuku installed / running | you | know exactly what to keep off | — |
-| 11 | Auto-gating build: PAA switches itself off around bank apps | **me (build)** + you (run) | Path A complete | Test 15 |
+| 11 | Owner screen-reading tile (P1-T6): off before banking, on after | **me (build)** + you (run) | manual path works | separate profile |
 | 15 | Bank apps in a work profile, PAA only in the main profile | you | profile split | agent phone |
 | 16 | Ask Axis support in writing about accessibility / allow-list | you | settles Axis's rule | — |
 | 3 | Play Integrity verdicts (basic / device / strong) on your iQOO | you (checker app) | — | note which apps are at risk |
@@ -179,7 +180,7 @@ runs inside the bank app on any phone.
 ## 7. Build phases (each ends with tests on the real phone)
 
 1. **Foundation** — task model v1 on phone; process split (`:parse` isolated, `:act`, `:guard`); typed-action
-   executor; owner-only rule; audit log; kill/Lockdown switches; Bank Shield layers 1–3; instant app open; SOS;
+   executor; owner-only rule; audit log; kill/Lockdown switches; owner screen-reading switch + banking-separation guide; instant app open; SOS;
    alarms polish. *Exit:* Tests 1/10/11 pass, eval 15/15, no phone hangs.
 2. **Communication and money (read-only)** — notification-reply messaging; SMS; Gmail; bank SMS + statement
    parsing; expense classifier; IOU ledger from chats; ask-anything over expenses. *Exit:* last 30 Axis alerts parsed right.
