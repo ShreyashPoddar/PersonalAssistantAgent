@@ -102,6 +102,22 @@ class LocalAIReservesShare(unittest.TestCase):
         jobs = [Job("a", [7], 100, True)]
         self.assertEqual(decide(DAY, mem({0, 7}), {0, 7}, jobs, localai_honours=True), (0, []))
 
+    def test_held_card_goes_to_paas_next_ready_job(self):
+        # night, total full, PAA holds its one card while its next GPU job waits -> release the hold for it
+        jobs = [Job("chain-1b", [7], 100, True)]
+        self.assertEqual(decide(NIGHT, mem({2, 3, 4, 7}), {2, 3, 4, 7}, jobs, wanting=1, localai_honours=True),
+                         (0, ["chain-1b"]))
+        self.assertEqual(decide(NIGHT, mem({2, 3, 4, 7}), {2, 3, 4, 7}, jobs, wanting=1), (0, ["chain-1b"]))
+
+    def test_hold_kept_when_nothing_waits_or_a_card_is_allowed(self):
+        jobs = [Job("chain-1b", [7], 100, True)]
+        self.assertEqual(decide(NIGHT, mem({2, 3, 4, 7}), {2, 3, 4, 7}, jobs, localai_honours=True), (0, []))
+        self.assertEqual(decide(NIGHT, mem({2, 7}), {2, 7}, jobs, wanting=1, localai_honours=True), (1, []))
+
+    def test_working_job_is_never_handed_over(self):
+        jobs = [Job("train", [7], 100, False)]
+        self.assertEqual(decide(NIGHT, mem({2, 3, 4, 7}), {2, 3, 4, 7}, jobs, wanting=1, localai_honours=True), (0, []))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

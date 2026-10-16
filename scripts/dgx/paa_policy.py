@@ -146,7 +146,8 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
                 excess -= max(1, len(j.cards))
         elif keep_free and idle < keep_free and used - pausing > floor and order and not pausing:
             preempt.append(order[0].id)
-        return (0 if rule.get("hold") else allow), preempt
+        allow = 0 if rule.get("hold") else allow
+        return allow, _hand_over(rule, order, preempt, allow, wanting, pausing)
 
     # LocalAI reserves PAA's share: PAA takes its guaranteed cards even when the total is full (LocalAI pauses its
     # newest run to make room), extra cards only when the total has room; never the card(s) kept idle for others.
@@ -171,7 +172,17 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
         preempt.append(j.id)
         excess -= max(1, len(j.cards))
         give -= max(1, len(j.cards))
-    return allow, preempt
+    return allow, _hand_over(rule, order, preempt, allow, wanting, pausing)
+
+
+def _hand_over(rule: dict, order: list[Job], preempt: list[str], allow: int, wanting: int, pausing: int) -> list[str]:
+    """A hold only keeps the card for PAA's NEXT work. When that work is ready but no card may be launched, release one
+    held card: the holder exits 0 (not resumed) and the waiting job gets the card on the next poll (PAA's share stays
+    reserved because it still has demand)."""
+    if allow > 0 or wanting <= 0 or pausing or rule.get("hold") or any(j.holding for j in order if j.id in preempt):
+        return preempt
+    held = [j for j in order if j.holding and j.id not in preempt]
+    return preempt + [held[0].id] if held else preempt
 
 
 # ---- what is on the box right now ----
