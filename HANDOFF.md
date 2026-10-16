@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-17 ~00:00 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-17 ~00:55 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -45,12 +45,17 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
 - AIModel PR #104 **merged** 2026-10-16 (LocalAI reserves PAA's share).
 - **Data:** `data-v1` done: 6,018 examples (train 5,672 / val 180 / test 166). 20k were generated but ~11k lost to a
   since-fixed restore bug -> `data-v2` (20k, same generator) queued.
-- **Runs (2026-10-16 night):** `chain-1b-v1b` trained 1B (gpu 7), then eval `eval-1b-v1`, then holds the card.
-  `chain-270m-v1b` waits for a card. Exports: `ai_edge_torch` was renamed `litert_torch`, and the old venv-export's torch
-  is too old for it -> `export_task.py` now builds `~/paa/venv-litert` once (litert-torch + tensorflow-cpu +
-  mediapipe 0.10.x, since mediapipe 1.x has no genai bundler; set verified in WSL py3.12) and `launch.sh` uses it once it has `.ok`.
-  Crashed: `export-1b-v1`, `-v1b`. Live: `export-1b-v1c`, then `export-270m-v1c` (ref `eaedaf8`).
-- **Queued next:** `pipeline v2 --parallel` (ref `eaedaf8`): `data-v2` (20k) -> `chain-1b-v2`/`chain-270m-v2` -> `export-*-v2`.
+- **v1 results (eval on data-v1 test, 166 ex + 12 scenarios):** 1B: 10/12 scenarios, has_task 0.90, count 0.86, false 4.8%,
+  missed 5.4%, title F1 0.76, when 0.74 (val loss rose in epoch 3: slight overfit). 270M: 10/12, has_task 0.90, count 0.87,
+  false 4.8%, missed 4.8%, title F1 0.71, when 0.70. Both fail `internship_other_batch`, `hackathon_link_random_group`.
+  Bundles: `paa-tasks-1b-v1.task` 1025 MB, `paa-tasks-270m-v1.task` 284 MB, downloaded to `models/export-*-v1/` (laptop
+  is now `hf auth login`-ed). Next: install on phone, `tools/eval_chats.py`, time/RAM.
+- Export toolchain: `ai_edge_torch` was renamed `litert_torch`; `export_task.py` builds `~/paa/venv-litert` once
+  (litert-torch + tensorflow-cpu + mediapipe 0.10.x; mediapipe 1.x has no genai bundler). Works since `eaedaf8`.
+- Policy fixes 2026-10-17: a held card goes to PAA's next ready job (`0899ab3`); a hold is ended directly (its SIGUSR1
+  never arrived -> PAA briefly used 5 cards), stale pauses re-asked after 10 min (`b8931f6`). Keep files LF (Python
+  write_text on Windows writes CRLF — fix with `sed -i 's/$//'`).
+- **Running/queued:** `data-v2` (20k, gpu 6, started 00:49 IST) -> `chain-1b-v2` / `chain-270m-v2` -> `export-*-v2`.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 
