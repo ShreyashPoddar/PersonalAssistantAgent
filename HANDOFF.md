@@ -54,7 +54,7 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
   (litert-torch + tensorflow-cpu + mediapipe 0.10.x; mediapipe 1.x has no genai bundler). Works since `eaedaf8`.
 - Policy fixes 2026-10-17: a held card goes to PAA's next ready job (`0899ab3`); a hold is ended directly (its SIGUSR1
   never arrived -> PAA briefly used 5 cards), stale pauses re-asked after 10 min (`b8931f6`). Keep files LF (Python
-  write_text on Windows writes CRLF — fix with `sed -i 's/$//'`).
+  write_text on Windows writes CRLF — fix with `sed -i 's/\r$//'`).
 - **Running/queued:** `data-v2` (20k, gpu 6, started 00:49 IST) -> `chain-1b-v2` / `chain-270m-v2` -> `export-*-v2`.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
