@@ -16,7 +16,12 @@ laptop / phone ──edit queue.yaml (branch gpu-queue)──▶ GitHub ◀─�
   `PAA_MAX_GPU_JOBS=1` PAA GPU job at a time, and only while `PAA_LEAVE_FREE=2` idle cards stay free for LocalAI.
 - **Backups:** finished outputs (data, model, `.task`, eval) and the queue state go to Hugging Face; a running
   data job's `.jsonl` is backed up every 30 min. A wiped box or a different GPU can continue from there.
-- Changing these scripts needs campus SSH (no remote code updates of the tools — same rule as LocalAI).
+- **One GPU budget for both projects** (`paa_policy.py`): day 07–19 IST 2 cards total, night up to 4 with 1 always
+  idle, never below 2 — the rules are LocalAI's `queue.yaml` `limits:` (edit there, from anywhere). PAA only uses
+  what LocalAI leaves, pauses its own jobs when the total is over, and resumes them automatically.
+- **Self-updating:** changes to `scripts/dgx/` merged to `main` are picked up by the poller within ~3 min
+  (syntax-checked first; a broken commit is refused). The watchdog restarts a hung poller (no loop for 30 min) and
+  rolls back to the last working commit if new code crash-loops. Campus is only needed for secrets / a wiped box.
 
 ## One-time install (on campus, ~20 min)
 

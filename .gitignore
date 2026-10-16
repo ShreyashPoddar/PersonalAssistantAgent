@@ -26,3 +26,4 @@ local.properties
 /*.png
 /app/build
 .kotlin/
+__pycache__/

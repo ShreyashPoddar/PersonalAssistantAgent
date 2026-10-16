@@ -10,12 +10,18 @@ the exported .task.
 """
 import argparse
 import json
+import os
+import signal
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import torch
+import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# shared GPU budget: the DGX poller may ask for the card back; eval is short, so just stop (rerun later)
+signal.signal(signal.SIGUSR1, lambda *_: os._exit(75))
 
 sys.path.insert(0, str(Path(__file__).parent))
 from paa_format import build_prompt, record_prompt, wrap  # noqa: E402
@@ -115,7 +121,9 @@ def main():
     ap.add_argument("--limit", type=int, default=600)
     a = ap.parse_args()
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16).to("cuda" if torch.cuda.is_available() else "cpu").eval()
+    major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
+    dt = {"dtype": torch.bfloat16} if (major, minor) >= (4, 56) else {"torch_dtype": torch.bfloat16}
+    model = AutoModelForCausalLM.from_pretrained(a.model, **dt).to("cuda" if torch.cuda.is_available() else "cpu").eval()
     rows = [json.loads(l) for l in (Path(a.data) / "test.jsonl").open(encoding="utf-8")][:a.limit]
     syn = score_synthetic(rows, generate(model, tok, [record_prompt(r) for r in rows]))
     cases = scenario_cases()

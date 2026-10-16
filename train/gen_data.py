@@ -13,8 +13,10 @@ Writes <out>/labeled.jsonl (every attempt, with keep=true/false), then train/val
 import argparse
 import hashlib
 import json
+import os
 import random
 import re
+import signal
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -207,6 +209,9 @@ def hold_gpu():
 
 
 def main():
+    # shared GPU budget: the DGX poller may ask for the card back -> stop now; a re-run continues from the
+    # finished chunks in labeled.jsonl (only the chunk in progress is redone)
+    signal.signal(signal.SIGUSR1, lambda *_: (print('PAUSED (shared GPU budget)', flush=True), os._exit(75)))
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=20000)
     ap.add_argument("--out", required=True)
@@ -231,7 +236,6 @@ def main():
     print(f"{len(done)} done, {len(todo)} to go, teacher {a.teacher}", flush=True)
 
     if todo:
-        import os
         # engine in this process: a start-up failure then ends the log with its real cause (the queue posts
         # only the last lines), instead of a generic "Engine core initialization failed" from a child process
         os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")

@@ -26,16 +26,21 @@ So with 2 GPUs: train 1B on one card and 270M on the other **in parallel**; the 
 the laptop GPU or a CPU box, or slot onto a DGX card between the big ones. Exports and evals are CPU/short and never
 block a training card.
 
-**How many cards we take (shared box with LocalAI):**
-- The DGX lane (`scripts/dgx/`) is governed by two knobs:
-  - `PAA_MAX_GPU_JOBS` — how many PAA GPU jobs run at once (**default now 2**; was 1).
-  - `PAA_LEAVE_FREE` — idle cards always left for LocalAI (**default 2**; the owner set 0 earlier for a solo run).
-- So by default PAA uses **up to 2 cards, and only while ≥ `PAA_LEAVE_FREE` others stay idle**. Collaborating with
-  LocalAI = coordinate on the control issue (#1) who is using what; when LocalAI is idle, raise `PAA_MAX_GPU_JOBS`;
-  when LocalAI needs the box, drop it to 0/1. These are env vars in `~/paa/secrets.env` on the DGX — changing them
-  needs one campus edit + `tmux kill-session -t paa-queue; watchdog.sh` (or set the new default in `poll.sh`, which
-  takes effect at the next campus `git pull`).
-- **Never interrupt a running job**, PAA's or LocalAI's. Parallelism only ever uses *idle* cards.
+**How many cards we take — ONE budget for both projects (LocalAI + PAA together):**
+| When (IST) | Total cards for both projects | Always idle for others | Guaranteed minimum |
+|---|---|---|---|
+| Day 07:00–19:00 | 2 | — | 2 |
+| Night 19:00–07:00 | up to 4 | 1 | 2 |
+- The rules live in **one place**: LocalAI's `queue.yaml` `limits:` (branch `dgx-queue` of `ShreyashPoddar/AIModel`),
+  editable on GitHub from anywhere; both pollers apply the change within ~3 min. PAA reads them from the file LocalAI's
+  poller writes (`~/localai/queue.parsed.limits`); if that's missing, the same rules are built in (`paa_policy.py`).
+- **PAA is the yielding tenant.** `scripts/dgx/paa_policy.py` counts every card this account uses (both projects,
+  incl. autoeval), launches PAA jobs only into what's left, and when the total goes over (e.g. at 07:00, or when
+  LocalAI starts runs) it **pauses PAA's own jobs** — finished-and-holding ones first, then the newest. A paused job
+  saves a checkpoint and exits; it **resumes automatically** (before any new job) when the budget allows. PAA never
+  touches LocalAI's runs.
+- `PAA_MAX_GPU_JOBS` (default 2) is only an extra PAA-side cap on top of the shared budget.
+- **Never interrupt a running job of LocalAI's.** PAA only ever uses cards the shared budget leaves free.
 
 **Launch it in parallel (from the laptop, any network):**
 ```bash
