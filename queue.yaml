@@ -21,4 +21,6 @@ jobs:
   - {id: data-v1b, step: gen_data, ref: 98b1c8cb07de, out: data-v1, resume: true, args: "--n 20000"}
   - {id: export-1b-v1, step: export, ref: 768c1bcbe6cb, after: train-1b-v1, args: "--size 1b --tag v1"}
   - {id: export-270m-v1, step: export, ref: 768c1bcbe6cb, after: train-270m-v1, args: "--size 270m --tag v1"}
+  - {id: chain-1b-v1b, step: train, ref: f6827de3d786, out: train-1b-v1, after: data-v1, args: "--base google/gemma-3-1b-it --then-eval eval-1b-v1 --hold"}
+  - {id: chain-270m-v1b, step: train, ref: f6827de3d786, out: train-270m-v1, after: data-v1, args: "--base google/gemma-3-270m-it --epochs 4 --then-eval eval-270m-v1 --hold"}
 control: {status: 7, logs: [data-v1b], stop: []}
