@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-16 ~23:15 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-17 ~00:00 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -42,15 +42,15 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
   1 card day and night when it has GPU work; a 2nd at night if needed and room** (`scripts/dgx/paa_policy.py`, 17 tests
   in `test_paa_policy.py`). PAA publishes `~/paa/demand.json`; budget-paused PAA jobs (SIGUSR1 → checkpoint → exit 75)
   resume automatically first.
-- **Pending: AIModel PR #104** (https://github.com/ShreyashPoddar/AIModel/pull/104) — LocalAI's `gpu_policy.py` reserves
-  PAA's share (reads demand.json, reports `paa_reserved`). **Owner must merge it** (Claude can't merge there); LocalAI's
-  poller then self-updates. Until merged, PAA only takes cards LocalAI leaves free (fully yielding — never over the cap).
-- **Data:** `data-v1` done: 6,018 examples (train 5,672 / val 180 / test 166; 3,861 with tasks). 20k were generated but
-  ~11k lost to a since-fixed restore bug.
-- **Queued (waiting for a card; LocalAI held all 4 night cards at 22:55):** `chain-1b-v1b` (train Gemma 3 1B → eval →
-  hold card) and `chain-270m-v1b` (270M, 4 epochs → eval → hold), ref `f6827de3d786`, out `train-1b-v1` /
-  `train-270m-v1`; then CPU exports `export-1b-v1` / `export-270m-v1` (ref `768c1bcbe6cb`) → `paa-tasks-{1b,270m}-v1.task`.
-  Earlier `chain-*-v1` crashed (`warmup_ratio` removed in new transformers) — fixed in `f6827de`.
+- AIModel PR #104 **merged** 2026-10-16 (LocalAI reserves PAA's share).
+- **Data:** `data-v1` done: 6,018 examples (train 5,672 / val 180 / test 166). 20k were generated but ~11k lost to a
+  since-fixed restore bug -> `data-v2` (20k, same generator) queued.
+- **Runs (2026-10-16 night):** `chain-1b-v1b` trained 1B (gpu 7), then eval `eval-1b-v1`, then holds the card.
+  `chain-270m-v1b` waits for a card. Exports: `ai_edge_torch` was renamed `litert_torch`, and the old venv-export's torch
+  is too old for it -> `export_task.py` now builds `~/paa/venv-litert` once (litert-torch + tensorflow-cpu +
+  mediapipe 0.10.x, since mediapipe 1.x has no genai bundler; set verified in WSL py3.12) and `launch.sh` uses it once it has `.ok`.
+  Crashed: `export-1b-v1`, `-v1b`. Live: `export-1b-v1c`, then `export-270m-v1c` (ref `eaedaf8`).
+- **Queued next:** `pipeline v2 --parallel` (ref `eaedaf8`): `data-v2` (20k) -> `chain-1b-v2`/`chain-270m-v2` -> `export-*-v2`.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 
@@ -103,8 +103,8 @@ Next build work starts at `docs/build/STATUS.md` P0 (phone tests) and P1 (action
   (bash heredocs with backslashes break).
 
 ## 6. Open items / next steps (in order)
-1. **Owner:** merge AIModel PR #104 (gives PAA its guaranteed card). Optionally add `paa: {min: 1, max: 1}` and
-   `night.paa: {min: 1, max: 2}` to LocalAI `limits:` after merging.
+1. (Optional, owner) add `paa: {min: 1, max: 1}` and
+   `night.paa: {min: 1, max: 2}` to LocalAI `limits:`.
 2. **Watch training:** when `chain-1b-v1b`/`chain-270m-v1b` launch/finish, report eval results (issue #1). Exports
    produce `.task` files → `python tools/gpu.py fetch export-1b-v1` → install on phone (`docs/build/P5_intelligence.md` T1),
    run `tools/eval_chats.py`, measure time/RAM. If a job crashes, read the tail, fix in `train/`, push, re-queue new id.
