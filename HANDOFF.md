@@ -1,50 +1,122 @@
-# HANDOFF — PAA (Personal Assistant Agent, Android, Kotlin/Compose)
-(Older detailed history: `git log -p HANDOFF.md`.)
+# HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
+Last updated 2026-10-16 ~23:15 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
-## Goal
-- Personal Android assistant on owner's phone (iQOO Z7 Pro I2301, Android 15, 8 GB, Dimensity 7200): read WhatsApp/Telegram chats on-device, auto-schedule real tasks (Hinglish, deadlines spread over messages), voice assistant "Oyee PA" (owner says "Oyee P-A" letters), call features, automations.
-- Current work: executing `PAA_EXECUTION_PLAN.md` (bugs B1–B22, speed S0–S7, voice lock V1–V2, cloud C1–C3, automation A1–A4, UX M6). Done = built, unit-tested, eval passes, verified on phone.
+## 1. Goal (owner's words, condensed)
+Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
+8 GB, Dimensity 7200): read WhatsApp/other apps and schedule real tasks (Hinglish, deadlines spread over messages);
+message/email/call on command; order from Zomato/Swiggy/Blinkit/Zepto/Amazon/Flipkart/Myntra (stopping at the
+owner's fingerprint + UPI PIN); alarms + wake-up calls; open any app instantly; SOS; compare buses/trains/flights;
+understand all expenses (Axis) and who owes whom; answer anything from the web. Fast, accurate, no phone hangs,
+**full Android security, banking apps keep working, chat/bank data never leaves the owner's devices**.
 
-## Done (all committed; `git log --oneline`)
-- Build+tests: `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" && ./gradlew -q assembleDebug testDebugUnitTest` — all pass at HEAD.
-- Eval harness `python tools/eval_chats.py --serial emulator-5554` (15 scenarios `tools/scenarios.json`; resets via DEBUG_INJECT `--ez reset true`, reads encrypted log via `--ez dumplog true`). Results: baseline 12/15 (`tools/eval_baseline.txt`), bug-fix build 15/15 (`tools/eval_fixes.txt`), S2 compact prompt 14/15 (`tools/eval_s2.txt`; failure "call pe baat karte hai" → "Call Aman", fixed by re-adding that example — NOT re-evaluated). Prompt tokens ~1200 → ~750.
-- Plan tasks done (code+unit tests, emulator-level): B1 Recurrence.kt, B2 fitPrompt budget, B3 async cancellable inference, B4, B5, B6 popup follow-up + Gemini history, B7 reschedule_task tool, B8 removed QuickScheduleReceiver, B9 RepositoryEntryPoint, B10 getNextTasks/getDueBetween, B11 persisted lastSeen + own replies outgoing (verified: WhatsApp incoming 1:1 has sender, selfDisplayName "You"), B12 reboot notification, B13 encrypted detection_log.enc, B14 chat_history.pending (DB v5), B17, B18, B20 keep rules (assembleRelease builds), B21 local_model.task rename, B22, S0 stats on 🧠 card, S1 TaskSignal, S2, S3 cloneSession prefix cache, S4, S5, S6 Android on-device hi-IN ASR for recordings, V1/V2 voice lock (VoicePrint.kt, assets/model-spk), C1 ClaudeClient, C2 PrivacyBoundaryTest, A1 WhatsApp send, A2a PAA calls you, A3 hackathon RegisterActivity, A4.2 FollowUpWorker, A4.3 auto-reply during calls, A4.5 local morning plan, M6 About-me settings.
-- Phone-verified earlier: chat reading works; Gemma 3n CPU 40–90 s/msg; post-call recording pipeline (old Vosk path).
+## 2. Where everything is (read these, in this order, when you start)
+| File | What |
+|---|---|
+| `docs/PAA_SYSTEM_PLAN.md` | **Master plan** (v2): platform decision (stock locked Android 15 + agent app), architecture, capabilities, security, phases, risks |
+| `docs/build/README.md` → `STATUS.md` → `P0`…`P5` | **Build guide** (task cards detailed enough for Haiku), rules, workflow, commands; `STATUS.md` = checklist (nothing ticked yet) |
+| `docs/build/PARALLELISM.md` | GPU sharing with LocalAI, parallel build agents (lanes, worktrees), DB version registry (v6…v11 reserved) |
+| `docs/MODEL_PLAN.md` | On-device model plan (gate, 270M/1B task model, efficiency ideas, decision rule) |
+| `docs/research/platform-research-2026-10-16.pdf` | Owner's web research (bootloader, banking apps, AI calls, MCP ordering…) the plan is built on |
+| `train/` | Model pipeline: `gen_data.py` (vLLM teacher → synthetic Hinglish data) → `train_sft.py` → `eval_model.py` → `export_task.py` (MediaPipe `.task`); `paa_format.py` = prompt shared with the app |
+| `scripts/dgx/` | DGX GPU lane (poller, launcher, budget policy, watchdog, HF backups) + `README.md` |
+| `tools/gpu.py` | Drive the DGX queue from anywhere (`pipeline`, `add`, `status`, `logs`, `stop`, `watch`, `fetch`) |
+| `PAA_EXECUTION_PLAN.md`, `PAA_MASTER_ARCHITECTURE_PLAN.md` | Older app plans (bug/speed tasks B*/S*/V*/C*/A*, mostly done) |
 
-## Decisions
-- Gemma 3n E2B on CPU only for models >1.5 GB (GPU copy → LOW_MEMORY kill). Gemma 3 1B rejected (bad quality).
-- Live other-side call audio impossible on iQOO (DOWNLINK/CALL blocked, no call captions, recorder writes after hang-up). Rejected: root, cloud conference bot, Phone Link, speaker hack. Built: own-voice/speaker live + post-call recording.
-- Voice commands: regex → Gemini (10 s timeout) → Gemma only offline.
-- Few-shot names leaked into tasks → placeholder pattern + PROMPT_EXAMPLE_WORDS filter on titles only.
-- Hackathons: assisted autofill, never auto-submit. A2b (AI calls to friends) not built: paid, needs approval.
-- B16 skipped: PSS ~3.5 GB with model; Hindi model ~80 MB.
+## 3. Current state
 
-## Files
-- `PAA_EXECUTION_PLAN.md` — task specs.
-- `app/src/main/java/com/paa/assistant/services/ChatMessageProcessor.kt` — pipeline, bursts (BURST_MS 20 s), groundedWhen, mergeSameWork, AFFIRMATIVE, TaskSignal gate.
-- `.../core/ai/LocalLlm.kt` — ask() async + prefix cache, fitPrompt, chatPromptPrefix/buildChatPrompt (companion).
-- `.../services/WakeListenerService.kt` — EN/HI wake grammars, voice-lock verify, in-call analysis.
-- `.../services/CallRecordingProcessor.kt` — recordings; transcribeWithAndroid + Vosk fallback.
-- `.../core/messaging/WhatsAppSender.kt`, `ContactResolver.kt`; `.../services/PaaCallService.kt`, `PaaCallActivity.kt`; `.../core/hackathon/*`; `.../workers/FollowUpWorker.kt`; `.../core/profile/UserProfile.kt` (prefs-backed).
-- `app/src/debug/.../DebugInjectReceiver.kt` — extras `text/chat/sender/group/out`, `reset`, `dumplog`.
+### 3a. DGX model training — RUNNING ON ITS OWN, controlled via GitHub
+- DGX = SRM DGX A100 `srmist28@172.16.0.32`, 8×A100-40GB, account **shared with the LocalAI project** (owner = Person B
+  there). `HOME=/raid/workspace/srmist28` (no real home). PAA lives in `~/paa` (tools checkout `~/paa/PAA` on main,
+  mirror `~/paa/PAA.git`, venvs `venv` + `venv-export`, `artifacts/`, `jobs/`, `secrets.env` with HF_TOKEN /
+  GITHUB_TOKEN (same token as LocalAI) / `PAA_ISSUE=1` / `PAA_LEAVE_FREE=0`).
+- **Control = GitHub only:** queue file `queue.yaml` on branch **`gpu-queue`** (never merge/delete it); the poller
+  (tmux `paa-queue`, polls every 3 min) posts everything to **issue #1**
+  (https://github.com/ShreyashPoddar/PersonalAssistantAgent/issues/1 — **122+ comments: always read page 2**, e.g.
+  `gh api "repos/ShreyashPoddar/PersonalAssistantAgent/issues/1/comments?per_page=100&page=2"`).
+- Installed tools = `f6827de` (+ self-update will pull `9fb451e`). Features: **self-update** from main (syntax-checked,
+  bad commits refused), watchdog cron (`*/10` + `@reboot`) restarts a hung poller (no loop 30 min) and rolls back
+  crash-looping tools to `~/paa/tools.good`; HF backups to private dataset `ShreyashPoddar/paa-artifacts`.
+- **GPU budget = ONE budget for BOTH projects** (owner's rule): day 07:00–19:00 IST **2 cards total**; night 19:00–07:00
+  **up to 4 total, 1 always idle, min 2**. Rules live in LocalAI's `queue.yaml` `limits:` (branch `dgx-queue` of
+  `ShreyashPoddar/AIModel`); PAA reads `~/localai/queue.parsed.limits` (defaults built in). **PAA's share: guaranteed
+  1 card day and night when it has GPU work; a 2nd at night if needed and room** (`scripts/dgx/paa_policy.py`, 17 tests
+  in `test_paa_policy.py`). PAA publishes `~/paa/demand.json`; budget-paused PAA jobs (SIGUSR1 → checkpoint → exit 75)
+  resume automatically first.
+- **Pending: AIModel PR #104** (https://github.com/ShreyashPoddar/AIModel/pull/104) — LocalAI's `gpu_policy.py` reserves
+  PAA's share (reads demand.json, reports `paa_reserved`). **Owner must merge it** (Claude can't merge there); LocalAI's
+  poller then self-updates. Until merged, PAA only takes cards LocalAI leaves free (fully yielding — never over the cap).
+- **Data:** `data-v1` done: 6,018 examples (train 5,672 / val 180 / test 166; 3,861 with tasks). 20k were generated but
+  ~11k lost to a since-fixed restore bug.
+- **Queued (waiting for a card; LocalAI held all 4 night cards at 22:55):** `chain-1b-v1b` (train Gemma 3 1B → eval →
+  hold card) and `chain-270m-v1b` (270M, 4 epochs → eval → hold), ref `f6827de3d786`, out `train-1b-v1` /
+  `train-270m-v1`; then CPU exports `export-1b-v1` / `export-270m-v1` (ref `768c1bcbe6cb`) → `paa-tasks-{1b,270m}-v1.task`.
+  Earlier `chain-*-v1` crashed (`warmup_ratio` removed in new transformers) — fixed in `f6827de`.
+- The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
+  decide routine things yourself and inform (don't ask).
 
-## Open issues
-- Nothing from 2026-10-03 evening installed on phone yet.
-- Unverified on phone: WhatsApp ids `com.whatsapp:id/entry`, `com.whatsapp:id/send` (A1 auto-tap); voice-lock THRESHOLD 0.55 (PC: same voice 0.67–0.89, other 0.24–0.41; needs ~2.5 s speech after wake); PaaCall self-managed call; RegisterActivity autofill; S6 hi-IN availability; release smoke test (separate signing would wipe emulator model).
-- S3 prefix-cache speed effect unmeasured.
-- Not started: S7 (openWakeWord/Porcupine), A2b, A4.1 Classroom, A4.4 SMS, A4.6–A4.8, B19/C3 (owner must restrict Gemini key / proxy).
+### 3b. Android app — code done, phone verification pending
+- Build+tests: `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" && ./gradlew -q assembleDebug testDebugUnitTest` — green at HEAD.
+- Done earlier (see git log): B1–B22, S0–S6, V1/V2 voice lock, C1/C2, A1 WhatsApp send, A2a PAA calls you, A3 hackathon
+  autofill, A4.2/4.3/4.5, M6. Eval `python tools/eval_chats.py --serial emulator-5554`: 15/15 at the bug-fix build;
+  last run 10/10 passed (5 not run) — `tools/eval_head.txt`.
+- Committed 2026-10-16 but **not verified on the phone**: wake listener restarts after mic errors; accessibility re-reads
+  reopened (incl. locked) chats, trailing scan, own messages from tick bubbles, WhatsApp 2.26.38 send id
+  `conversation_entry_action_button`; DetectionLog 200 entries; compact prompt for `paa-*.task` models
+  (`LocalLlm.buildCompactPrompt`, parity test `CompactPromptTest` vs `train/golden_prompt.txt`).
+- Phone facts: "Oyee PA" toggle was OFF on the phone (`wake_listener_enabled=false`) — owner must turn it on.
 
-## User preferences
-- Chat/call content never leaves phone; no TTS (except in-call earpiece and opt-in PAA-calls-you); alarms 07–19; names shreyash/shreyas, batch 2028, hackathon group hackstreet_Boys.
-- Wants speed and real testing; terse replies; ask before subagents.
-- Phone: `adb connect 192.168.1.3:<port>` (port changes — ask). Always `-s <serial>`; `export MSYS_NO_PATHCONV=1`.
+### 3c. The big plan — nothing of P0–P5 built yet
+Next build work starts at `docs/build/STATUS.md` P0 (phone tests) and P1 (action framework / Guard / confirm / audit).
 
-## 2026-10-04 → 10-12 (uncommitted, built + unit-tested, installed on phone, NOT phone-verified)
-- Wake listener: mic read error now restarts (was silently deaf after PAA call); resume waits for MODE_NORMAL. `wake_listener_enabled` was false on phone (user must toggle on).
-- Accessibility: reopening a chat re-reads messages since last open (locked chats e.g. Ahana), trailing scan after throttle, own messages read from tick bubbles, WhatsApp 2.26.38 send button = `conversation_entry_action_button` (no `id/send`). DetectionLog MAX 40→200.
-- Own model: `train/` (gen_data → train_sft → eval_model → export_task, see `train/README.md`), compact prompt `LocalLlm.buildCompactPrompt` used when `local_model.task.paa` marker exists (import of `paa-*.task`); `CompactPromptTest` = parity with `train/golden_prompt.txt`.
-- DGX lane `scripts/dgx/` (separate from LocalAI: ~/paa, tmux paa-queue, branch gpu-queue, HF `ShreyashPoddar/paa-artifacts`), laptop control `tools/gpu.py`. Not installed — needs campus visit (`scripts/dgx/README.md`), Person A told, Gemma licences accepted, new GitHub PAT, control issue.
-- Eval at that HEAD: 10/10 run passed, 5 not run (background limit) — `tools/eval_head.txt`.
+## 4. Decisions (and why) — don't relitigate
+- **Platform:** stay on stock, **locked** Android 15 on the iQOO + PAA as a privileged agent app. No custom OS: iQOO
+  bootloader isn't legitimately unlockable, unlocked = weaker security + banking apps break, a fork can't keep up with
+  patches. Pixel + GrapheneOS-based build is the only "own OS" path, only if stock hits real walls (and banking tests pass).
+- **Banking:** PAA **never** detects bank apps to hide from them or race their launch (that's circumventing a security
+  control — a safety boundary; an earlier draft was cut off for it). Instead: owner-controlled "screen reading off"
+  tile/switch/voice ("banking mode"), or banking in a separate Android profile; money data from bank SMS + statements.
+  UPI PIN always typed by the owner; payments need fingerprint (BiometricPrompt + Keystore CryptoObject).
+- **AI on SIM calls:** impossible on-phone (uplink needs system permission). Home hub (laptop/Pi) as Bluetooth
+  hands-free bridge on the owner's number; cloud number (Exotel/Plivo) when away; AI always discloses itself.
+- **Models:** Gemma 3 1B + 270M fine-tuned by distillation (Qwen3-32B-AWQ teacher), int8, phone GPU, compact prompt
+  (~150 tokens vs ~750). Synthetic data only — real chats never leave the phone. LocalAI's own architecture (OLMoE MoE)
+  is not used on the phone (7B weights in RAM, no MediaPipe support).
+- **DGX:** GitHub-only control (no VPN allowed); PAA lane separate from LocalAI's; only whitelisted steps
+  (`gen_data|train|eval|export`) from commits on main; one-card-holding "chain" jobs because the card gets taken between jobs.
+- Gemma 3n E2B (3.1 GB, CPU) stays the fallback model until the fine-tuned one passes eval 15/15 on the phone.
+- Voice commands: regex → Gemini (10 s) → local model offline. Few-shot names leaked into tasks → placeholder words filter.
 
-## Next step
-- User: phone-test wake listener + accessibility fixes; decide commit/push (jobs need code on `main`); campus install of DGX lane; then `python tools/gpu.py pipeline v1`.
+## 5. How to operate
+- **Queue / check DGX from anywhere:** `python tools/gpu.py status` (then read issue #1 page 2 after ~3 min),
+  `logs <id>`, `stop <id>`, `add train --id … --after data-v1 --out … --args "…"`, `pipeline <tag> [--parallel] [--no-data] [--no-hold]`.
+  Job ids are single-use; re-queue a crashed job under a new id (`-v1c`). `ref` must be a commit on `main` (push first).
+- **Change DGX scripts:** edit `scripts/dgx/`, run `cd scripts/dgx && python test_paa_policy.py`, `bash -n *.sh`, push
+  → installed within ~3 min (watch issue #1 for "tools updated"). Simulated DGX for risky changes: WSL scripts in the
+  session scratchpad were used (`setup.sh`/`run.sh`: fake nvidia-smi/curl/training) — recreate if needed.
+- **Campus is needed only for:** secrets/token changes, a wiped workspace. SSH: in PowerShell
+  `wsl -d Ubuntu-24.04 -u root -- ssh -M -S /root/.ssh/dgx.sock -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=60 -N srmist28@172.16.0.32`
+  (owner types password), then a shell via `... ssh -t -S /root/.ssh/dgx.sock srmist28@172.16.0.32`. **Claude may NOT run
+  commands on the DGX over SSH (blocked as remote shell writes)** — give the owner exact commands to paste.
+- **Phone:** `adb connect 192.168.1.3:<port>` (port changes — ask the owner), always `-s <serial>`,
+  `export PATH="$LOCALAPPDATA/Android/Sdk/platform-tools:$PATH" MSYS_NO_PATHCONV=1`. Install `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+- Python on the laptop: `PYTHONIOENCODING=utf-8` for scripts printing non-ASCII; write multi-line Python edits as files
+  (bash heredocs with backslashes break).
+
+## 6. Open items / next steps (in order)
+1. **Owner:** merge AIModel PR #104 (gives PAA its guaranteed card). Optionally add `paa: {min: 1, max: 1}` and
+   `night.paa: {min: 1, max: 2}` to LocalAI `limits:` after merging.
+2. **Watch training:** when `chain-1b-v1b`/`chain-270m-v1b` launch/finish, report eval results (issue #1). Exports
+   produce `.task` files → `python tools/gpu.py fetch export-1b-v1` → install on phone (`docs/build/P5_intelligence.md` T1),
+   run `tools/eval_chats.py`, measure time/RAM. If a job crashes, read the tail, fix in `train/`, push, re-queue new id.
+   When everything is done and a card is only held, **tell the owner before releasing it**.
+3. **Phone:** owner gives wireless-debugging port → verify the 2026-10-16 app fixes (wake listener, accessibility,
+   Ahana's locked chat, sent messages) and start `docs/build/P0_setup_and_tests.md`.
+4. **Build:** P1 per `docs/build/STATUS.md` (several agents in parallel per `PARALLELISM.md` only if the owner asks).
+5. Later: v2 data (20k+, harder cases, shorter answer format), learned gate, hub (P4).
+
+## 7. Owner preferences
+- Brief replies, result first; no recap; ask before spawning subagents (token use); suggest a fresh conversation for unrelated tasks.
+- "Don't ask me, inform me" for routine decisions; ask only for money, accounts, destructive actions, owner-only steps.
+- Chat/call/bank content never leaves the owner's devices; no TTS except in-call earpiece / opt-in PAA-calls-you; alarms ring 07–19.
+- Names shreyash/shreyas, batch 2028, hackathon group hackstreet_Boys. Contact Ahana (locked chat on WhatsApp).
+- Wants speed, parallelism, real testing, GPUs kept busy within the shared budget; public repo is fine.
