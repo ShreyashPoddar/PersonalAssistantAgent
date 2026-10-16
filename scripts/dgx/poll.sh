@@ -84,10 +84,17 @@ stop_job() {
 }
 
 pause_job() {  # $1 = job id: SIGUSR1 to its python processes -> save a checkpoint, exit 75 (resumed later, nothing lost)
-  local d="$ROOT/jobs/$1" pid n=0
-  [ -f "$d/.preempting" ] && return       # already asked
+  local d="$ROOT/jobs/$1" real pid n=0
+  if grep -q "holding the card for PAA" "$d/run.log" 2>/dev/null; then   # work done, only holds: free it right away
+    tmux kill-session -t "paa-$1" 2>/dev/null
+    printf 'released the card (shared GPU budget); all work for this job is done\nexit=0\n' >> "$d/run.log"
+    return                                 # announced as "finished exit=0 ... released the card"
+  fi
+  # already asked: wait, but ask again if it hasn't exited in 10 min (the paa_policy counts it as using its card again)
+  [ -f "$d/.preempting" ] && [ -z "$(find "$d/.preempting" -mmin +10 2>/dev/null)" ] && return
+  real=$(readlink -f "$d")                 # /proc/<pid>/cwd is the resolved path: compare with the resolved job dir
   for pid in $(pgrep -u "$(id -u)" -f python); do
-    case "$(readlink /proc/$pid/cwd 2>/dev/null)" in "$d"/*|"$d") kill -USR1 "$pid" 2>/dev/null && n=$((n + 1)) ;; esac
+    case "$(readlink /proc/$pid/cwd 2>/dev/null)" in "$real"/*|"$real"|"$d"/*|"$d") kill -USR1 "$pid" 2>/dev/null && n=$((n + 1)) ;; esac
   done
   touch "$d/.preempting"
   post "[PAA DGX] giving a card back: pausing \`$1\` ($MODE budget for both projects; it saves and resumes automatically)."

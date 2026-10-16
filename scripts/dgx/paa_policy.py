@@ -29,6 +29,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
+from time import time as time_now
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -232,8 +233,9 @@ def paa_jobs(root: Path) -> list[Job]:
         if not cards:
             continue                                # CPU job (export): not part of the GPU budget
         log = (d / "run.log").read_text(errors="replace") if (d / "run.log").exists() else ""
+        pre = d / ".preempting"            # asked to pause; after 10 min without exiting it counts as using its card
         jobs.append(Job(d.name, cards, (d / "run.sh").stat().st_mtime, "holding the card for PAA" in log,
-                        (d / ".preempting").exists()))
+                        pre.exists() and time_now() - pre.stat().st_mtime < 600))
     return jobs
 
 
