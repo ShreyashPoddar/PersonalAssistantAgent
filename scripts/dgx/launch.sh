@@ -68,7 +68,10 @@ fi
 JOB="$ROOT/jobs/$ID"
 [ -e "$JOB/run.sh" ] && { echo "job dir $JOB exists (ids are single-use)"; exit 1; }
 mkdir -p "$JOB" "$ART/$OUT"
-VENV="$ROOT/venv"; [ "$STEP" = export ] && [ -x "$ROOT/venv-export/bin/python" ] && VENV="$ROOT/venv-export"
+VENV="$ROOT/venv"
+if [ "$STEP" = export ]; then   # venv-litert = fresh litert-torch venv export_task.py builds itself; venv-export = old one
+  for v in venv-litert venv-export; do [ -x "$ROOT/$v/bin/python" ] && { [ "$v" != venv-litert ] || [ -f "$ROOT/$v/.ok" ]; } && { VENV="$ROOT/$v"; break; }; done
+fi
 {
   echo '#!/usr/bin/env bash'
   echo "# $ID: $STEP @ $REF -> artifacts/$OUT  (launched $(date '+%F %T') by scripts/dgx/launch.sh)"

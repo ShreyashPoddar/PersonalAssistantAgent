@@ -1,6 +1,9 @@
-# export step (CPU). Separate venv: litert-torch pins its own torch / tensorflow versions.
-# litert-torch = renamed ai-edge-torch (its generative API, incl. the Gemma 3 converter, is only there now).
-litert-torch>=0.8
-mediapipe>=0.10.21
+# export step (CPU). Own venv (export_task.py builds <root>/venv-litert from this file): litert-torch pins its own torch.
+# litert-torch = renamed ai-edge-torch (its generative API, incl. the Gemma 3 converter, is only there now); its
+# released code still imports tensorflow. mediapipe 1.x dropped the genai .task bundler -> stay on 0.10.x.
+# Checked together on Python 3.12 (2026-10-16): litert-torch 0.9.4, tensorflow-cpu 2.21, mediapipe 0.10.35, pip check clean.
+litert-torch>=0.9
+tensorflow-cpu
+mediapipe>=0.10.21,<0.11
 huggingface_hub>=0.34
 transformers>=4.56

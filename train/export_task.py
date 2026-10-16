@@ -9,11 +9,11 @@ app wraps the turn itself (LocalLlm.wrapTurn), exactly like training did. The fi
 that is how the app knows to send the compact prompt.
 
 Runs on CPU (no GPU needed) but wants ~16 GB RAM for 1B. If the converter's flags changed, its --help is printed.
-If the venv only has the old ai-edge-torch (whose generative API moved to litert-torch), litert-torch is pip-installed.
+If the converter doesn't import here (old ai-edge-torch venv), a fresh venv-litert is built once and used.
 """
 import argparse
-import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -21,20 +21,34 @@ from pathlib import Path
 
 
 REQS = Path(__file__).with_name("requirements-export.txt")
+CONV = "litert_torch.generative.examples.gemma3.convert_gemma3_to_tflite"
+CHECK = f"import {CONV}, mediapipe.tasks.python.genai.bundler"
 
 
-def converter_module():
-    """Module path of the Gemma 3 converter: litert_torch (current) or ai_edge_torch (before the rename)."""
-    for pkg in ("litert_torch", "ai_edge_torch"):
-        try:
-            if importlib.util.find_spec(f"{pkg}.generative.examples.gemma3.convert_gemma3_to_tflite"):
-                return f"{pkg}.generative.examples.gemma3.convert_gemma3_to_tflite"
-        except ModuleNotFoundError:
-            pass
-    print("converter not found; installing litert-torch into this venv", flush=True)
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(REQS)], check=True)
-    importlib.invalidate_caches()
-    return "litert_torch.generative.examples.gemma3.convert_gemma3_to_tflite"
+def ensure_toolchain():
+    """Re-run this script in a venv where the converter imports. The old venv-export has ai-edge-torch's torch
+    pins, which break litert-torch's torchao, so a fresh <root>/venv-litert is built once (pip resolves it as one set)."""
+    if subprocess.run([sys.executable, "-c", CHECK], capture_output=True).returncode == 0:
+        return
+    venv = Path(sys.prefix).parent / "venv-litert"
+    py = venv / "bin" / "python"
+    if Path(sys.prefix).resolve() == venv.resolve():
+        subprocess.run([sys.executable, "-c", CHECK])          # show the import error
+        sys.exit("converter does not import even in venv-litert")
+    if not py.exists() or subprocess.run([str(py), "-c", CHECK], capture_output=True).returncode != 0:
+        print(f"building {venv} (litert-torch + mediapipe)", flush=True)
+        shutil.rmtree(venv, ignore_errors=True)
+        if subprocess.run([sys.executable, "-m", "venv", str(venv)]).returncode != 0:   # no ensurepip (as setup_env.sh)
+            shutil.rmtree(venv, ignore_errors=True)
+            subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True)
+            subprocess.run(f"curl -sSf https://bootstrap.pypa.io/get-pip.py | {py}", shell=True, check=True)
+        subprocess.run([str(py), "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
+        subprocess.run([str(py), "-m", "pip", "install", "-q", "-r", str(REQS)], check=True)
+        if subprocess.run([str(py), "-c", CHECK]).returncode != 0:
+            sys.exit("converter does not import in the fresh venv-litert (see error above)")
+        (venv / ".ok").write_text("ok")                         # launch.sh uses venv-litert directly from now on
+    print(f"re-running in {venv}", flush=True)
+    os.execv(str(py), [str(py), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 
 def main():
@@ -51,7 +65,8 @@ def main():
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     work = out / "tflite"; work.mkdir(exist_ok=True)
 
-    mod = converter_module()
+    ensure_toolchain()
+    mod = CONV
     cmd = [sys.executable, "-m", mod,
            f"--model_size={a.size}", f"--checkpoint_path={a.model}", f"--output_path={work}",
            "--output_name_prefix=paa", f"--prefill_seq_lens={a.prefill}", f"--kv_cache_max_len={a.kv}",
