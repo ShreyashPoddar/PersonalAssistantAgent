@@ -128,9 +128,22 @@ self_update() {  # fast-forward the tools checkout to merged main when scripts/d
   post "[PAA DGX] ⚠ tools update to \`${new:0:7}\` failed (checkout can't fast-forward); still on \`${old:0:7}\`."
 }
 
+gpu_wanting() {  # PAA GPU jobs ready to start now: paused ones + queued GPU jobs whose input is done
+  local n id step ref out after gpus resume args
+  n=$(grep -c . "$PAUSED" 2>/dev/null || true); n=${n:-0}
+  while IFS=$'\x1f' read -r id step ref out after gpus resume args; do
+    [ -n "$id" ] || continue
+    grep -qxF "$id" "$STATE" && continue
+    [ "$step" = export ] || [ "$gpus" = 0 ] && continue
+    [ -z "$after" ] || [ -f "$ART/$after/.done" ] || continue
+    n=$((n + ${gpus:-1}))
+  done < "$ROOT/queue.parsed"
+  echo "$n"
+}
+
 budget() {  # shared GPU budget for both projects -> MODE, ALLOW; pauses PAA jobs when the total is over
   local pol last
-  pol=$(timeout 60 python "$HERE/paa_policy.py" "$ROOT" 2>"$ROOT/sched.err") || pol="MODE error"$'\n'"ALLOW 0"
+  pol=$(PAA_WANTING=$(gpu_wanting) timeout 60 python "$HERE/paa_policy.py" "$ROOT" 2>"$ROOT/sched.err") || pol="MODE error"$'\n'"ALLOW 0"
   MODE=$(printf '%s\n' "$pol" | sed -n 's/^MODE //p'); ALLOW=$(printf '%s\n' "$pol" | sed -n 's/^ALLOW //p'); ALLOW=${ALLOW:-0}
   for j in $(printf '%s\n' "$pol" | sed -n 's/^PREEMPT //p'); do pause_job "$j"; ALLOW=0; done
   last=$(cat "$ROOT/last_mode" 2>/dev/null)
