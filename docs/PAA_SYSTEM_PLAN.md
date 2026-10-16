@@ -193,6 +193,21 @@ runs inside the bank app on any phone.
 
 ---
 
+## 7b. Building it fast — parallel compute and parallel agents
+
+Full detail in `docs/build/PARALLELISM.md`.
+- **GPUs, shared with LocalAI:** once data exists, every model trains independently. `tools/gpu.py pipeline <tag>
+  --parallel` trains 1B and 270M on **two cards at once**; the DGX lane allows up to `PAA_MAX_GPU_JOBS=2` PAA cards,
+  only while `PAA_LEAVE_FREE` idle cards stay for LocalAI, and never interrupts a running job. Small models (gate,
+  expense classifier) and evals run on the laptop GPU at the same time.
+- **Several build agents:** after the thin core (P1-T1→T4), most tasks fan out — up to five agents in parallel in
+  Phase 1 alone, the hub (Phase 4) from day one, model work (Phase 5) independently on the DGX. Each agent claims a
+  task in `STATUS.md`, works in its own git worktree, merges small; the database version numbers are the one thing
+  coordinated through a registry.
+- **On the phone:** concurrent, low-priority background work; gate → small model → big model only when needed.
+
+---
+
 ## 8. Hub (home)
 
 - **Now:** your laptop (Windows 11, RTX 5050) when it's on — runs the hands-free bridge, speech models and the

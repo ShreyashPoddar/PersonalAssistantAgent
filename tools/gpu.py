@@ -3,7 +3,9 @@
 and reads the control issue, through the `gh` CLI. The DGX poller (scripts/dgx/poll.sh) does the rest.
 
     python tools/gpu.py init                          # one time: create branch gpu-queue with the template
-    python tools/gpu.py pipeline v1 [--n 20000]       # queue data -> train 1B + 270M -> eval + export (6 jobs)
+    python tools/gpu.py pipeline v1 [--n 20000]       # data -> one card: 1B, eval, 270M, eval, hold -> exports (CPU)
+    python tools/gpu.py pipeline v2 --parallel        # data -> two cards at once: 1B chain + 270M chain -> exports
+    python tools/gpu.py pipeline v1 --parallel --no-data   # data-v1 already exists: just the two training chains
     python tools/gpu.py add train --id train-1b-v2 --after data-v1 --args "--base google/gemma-3-1b-it --lr 3e-5"
     python tools/gpu.py status | logs <id> | stop <id>
     python tools/gpu.py watch [-n 10]                 # latest posts from the DGX on the control issue
@@ -72,6 +74,28 @@ def job_line(jid, step, ref, after=None, args=None, out=None, gpus=None, resume=
     return "  - {" + ", ".join(parts) + "}"
 
 
+def pipeline_lines(ref, t, n, parallel, hold, with_data=True):
+    """Queue lines for a full model build. Each chain is ONE job that keeps its card from training to the end
+    (separate jobs would leave the card idle between steps on a shared box). Exports run on CPU and start as soon as
+    their model is saved.
+      sequential: one card trains 1B, evals it, then trains + evals 270M.
+      parallel:   two independent chains, 1B and 270M, each on its own card at the same time."""
+    h = " --hold" if hold else ""
+    lines = [job_line(f"data-{t}", "gen_data", ref, args=f"--n {n}")] if with_data else []
+    if parallel:
+        lines += [job_line(f"chain-1b-{t}", "train", ref, after=f"data-{t}", out=f"train-1b-{t}",
+                           args=f"--base google/gemma-3-1b-it --then-eval eval-1b-{t}{h}"),
+                  job_line(f"chain-270m-{t}", "train", ref, after=f"data-{t}", out=f"train-270m-{t}",
+                           args=f"--base google/gemma-3-270m-it --epochs 4 --then-eval eval-270m-{t}{h}")]
+    else:
+        lines += [job_line(f"chain-{t}", "train", ref, after=f"data-{t}", out=f"train-1b-{t}",
+                           args=f"--base google/gemma-3-1b-it --then-eval eval-1b-{t} "
+                                f"--then-train google/gemma-3-270m-it,train-270m-{t},eval-270m-{t}{h}")]
+    lines += [job_line(f"export-1b-{t}", "export", ref, after=f"train-1b-{t}", args=f"--size 1b --tag {t}"),
+              job_line(f"export-270m-{t}", "export", ref, after=f"train-270m-{t}", args=f"--size 270m --tag {t}")]
+    return lines
+
+
 def control(text, key, value):
     import yaml
     c = (yaml.safe_load(text) or {}).get("control") or {}
@@ -90,6 +114,9 @@ def main():
     sub.add_parser("init")
     p = sub.add_parser("pipeline"); p.add_argument("tag"); p.add_argument("--n", type=int, default=20000)
     p.add_argument("--ref")
+    p.add_argument("--parallel", action="store_true", help="1B and 270M on two cards at once (needs PAA_MAX_GPU_JOBS>=2)")
+    p.add_argument("--no-hold", action="store_true", help="release the card(s) when training is done instead of holding")
+    p.add_argument("--no-data", action="store_true", help="data-<tag> already exists: queue only the training")
     p = sub.add_parser("add"); p.add_argument("step", choices=["gen_data", "train", "eval", "export"])
     p.add_argument("--id", required=True); p.add_argument("--after"); p.add_argument("--args"); p.add_argument("--out")
     p.add_argument("--gpus", type=int); p.add_argument("--resume", action="store_true"); p.add_argument("--ref")
@@ -122,15 +149,8 @@ def main():
 
     text, sha = read_queue()
     if a.cmd == "pipeline":
-        ref, t = a.ref or main_sha(), a.tag
-        lines = [job_line(f"data-{t}", "gen_data", ref, args=f"--n {a.n}"),
-                 job_line(f"train-1b-{t}", "train", ref, after=f"data-{t}", args="--base google/gemma-3-1b-it"),
-                 job_line(f"train-270m-{t}", "train", ref, after=f"data-{t}", args="--base google/gemma-3-270m-it --epochs 4"),
-                 job_line(f"eval-1b-{t}", "eval", ref, after=f"train-1b-{t}"),
-                 job_line(f"eval-270m-{t}", "eval", ref, after=f"train-270m-{t}"),
-                 job_line(f"export-1b-{t}", "export", ref, after=f"train-1b-{t}", args=f"--size 1b --tag {t}"),
-                 job_line(f"export-270m-{t}", "export", ref, after=f"train-270m-{t}", args=f"--size 270m --tag {t}")]
-        write_queue(add_jobs(text, lines), sha, f"queue pipeline {t} @ {ref}")
+        write_queue(add_jobs(text, pipeline_lines(a.ref or main_sha(), a.tag, a.n, a.parallel, not a.no_hold, not a.no_data)),
+                    sha, f"queue pipeline {a.tag}{' (parallel)' if a.parallel else ''}")
     elif a.cmd == "add":
         line = job_line(a.id, a.step, a.ref or main_sha(), a.after, a.args, a.out, a.gpus, a.resume)
         write_queue(add_jobs(text, [line]), sha, f"queue {a.id}")

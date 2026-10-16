@@ -1,6 +1,7 @@
 # Build status — tick each task when done (done = built + tests pass + verified where required + committed)
 
-Do tasks top to bottom. `[ ]` = not started, `[~]` = in progress, `[x]` = done. Update this file as part of each
+Do tasks top to bottom, or in parallel where `PARALLELISM.md` allows. `[ ]` = not started, `[~] <lane>` = claimed /
+in progress, `[x]` = done. Update this file as part of each
 task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model does.
 
 ## Phase 0 — setup and decision tests (`P0_setup_and_tests.md`)

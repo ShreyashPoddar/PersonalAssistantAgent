@@ -11,7 +11,7 @@
 #
 # Env (optional): PAA_HOME (~/paa)  PAA_CONTROL_SLUG (repo with the gpu-queue branch + issue)  PAA_CODE_SLUG (repo
 #   jobs' code comes from)  PAA_QUEUE_REF (gpu-queue)  PAA_QUEUE_INTERVAL (180)  PAA_ISSUE (empty = don't post)
-#   PAA_HEARTBEAT (21600)  PAA_MAX_GPU_JOBS (1)  PAA_LEAVE_FREE (2)  PAA_HF_REPO  PAA_BACKUP_EVERY (1800)
+#   PAA_HEARTBEAT (21600)  PAA_MAX_GPU_JOBS (2)  PAA_LEAVE_FREE (2)  PAA_HF_REPO  PAA_BACKUP_EVERY (1800)
 set -uo pipefail
 shopt -s nullglob   # empty jobs/ or artifacts/ must loop zero times, not over a literal "*"
 ROOT="${PAA_HOME:-$HOME/paa}"
@@ -24,7 +24,7 @@ QREF="${PAA_QUEUE_REF:-gpu-queue}"
 INTERVAL="${PAA_QUEUE_INTERVAL:-180}"
 ISSUE="${PAA_ISSUE-}"
 HEARTBEAT="${PAA_HEARTBEAT:-21600}"
-MAXGPU="${PAA_MAX_GPU_JOBS:-1}"
+MAXGPU="${PAA_MAX_GPU_JOBS:-2}"   # up to 2 PAA cards, only while PAA_LEAVE_FREE stay idle for LocalAI
 ART="$ROOT/artifacts"; mkdir -p "$ART" "$ROOT/jobs"
 STATE="$ROOT/queue_state"; touch "$STATE"      # job ids already launched (or rejected)
 POSTED="$ROOT/queue_posted"; touch "$POSTED"   # job ids whose finish was announced
