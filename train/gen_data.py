@@ -51,7 +51,10 @@ CATEGORIES = [
     ("a money request or promise (UPI kar dena, 500 rupay bhej dena, paise wapas kab)", "received sent burst", 2),
     ("a meeting / class / viva / interview scheduled with the owner", "received burst", 2),
     ("something already done, said in past tense (I already submitted it, bhej diya tha)", "sent received", 1),
-    ("two unrelated tasks in one message (report bhejna + fees bharna)", "received sent", 1),
+    ("two unrelated tasks in one message (report bhejna + fees bharna)", "received sent", 3),
+    ("the owner promises two different things in one message, often joined by 'and' / 'aur' / 'phir', each with its own time (I'll call you by 140 and send the ppt at 315)", "sent", 3),
+    ("someone asks the owner for two or three separate things in one message (notes bhej de aur kal ka lab bhi le aana)", "received burst", 2),
+    ("a hackathon / event registration link with an @mention to the owner in a random, unrelated or large group (not a task)", "received", 2),
 ]
 LANGS = [("Hinglish (Roman-script Hindi mixed with English, as Indian students really text)", 6),
          ("English with Indian texting style", 3), ("Hindi in Devanagari script", 1),
@@ -99,7 +102,8 @@ Rules:
 - Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there.
 - title: 2-7 English words starting with a verb; name the person involved using ONLY names from the messages.
 - when: ALL time words for that task joined, even from different lines ("kal tak" + "5 baje se pehle" = "kal 5 baje se pehle"); else null. 140/315/1145 are clock times.
-- One task per piece of work. confidence 0-1. priority 0-3. registration true only for hackathon/event sign-ups.
+- One task per piece of work: two actions joined by "and"/"aur"/"phir" are TWO tasks (each with its own time), never
+  one merged title. confidence 0-1. priority 0-3. registration true only for hackathon/event sign-ups.
 - done: numbers of open tasks the messages show are already finished. update: open tasks whose deadline/details changed (never re-create them).
 - reason: one short sentence.
 
