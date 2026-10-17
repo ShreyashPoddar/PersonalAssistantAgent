@@ -34,6 +34,8 @@ CATEGORIES = [
     ("a project group assigns work to someone else, NOT the owner", "received burst", 2),
     ("a hackathon / fest / workshop registration post, sometimes for the owner's batch, sometimes not", "received", 2),
     ("an internship or job post that names eligible batches (sometimes includes the owner's batch, sometimes not)", "received", 2),
+    ("an internship / job / placement post that @mentions the owner by name but is ONLY for a different batch year than the owner's (not a task)", "received", 2),
+    ("someone in a random or unrelated group @mentions the owner with a hackathon / event registration link ('@name register for this'), not from the owner's team (not a task)", "received", 2),
     ("an advertisement, sale, cashback or promotional message", "received", 2),
     ("a bank / UPI / OTP / delivery / app notification style message", "received", 1),
     ("an announcement to the whole class or group with no personal action (holiday, room change, results out)", "received", 2),
@@ -91,7 +93,9 @@ Rules:
 - A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
 - Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
 - "haan kar dunga"/"ok will do" accepts the request above it; with nothing above it is NOT a task.
-- Internship/job posts: only if open to the {year} batch or no batch named.
+- Internship/job posts: only if open to the {year} batch or no batch named, even when they @mention the owner.
+- Hackathon/event registration links forwarded in a random or unrelated group are not tasks, even with an @mention;
+  only the owner's own team/organisers asking them to register, or the owner saying they will register, is a task.
 - Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there.
 - title: 2-7 English words starting with a verb; name the person involved using ONLY names from the messages.
 - when: ALL time words for that task joined, even from different lines ("kal tak" + "5 baje se pehle" = "kal 5 baje se pehle"); else null. 140/315/1145 are clock times.
@@ -180,6 +184,13 @@ def agree(a: dict, b: dict) -> bool:
     return True
 
 
+# capitalised words a title may use without them being names (data-v2 rejected ~100 good labels over these)
+TITLE_WORDS = {"the", "and", "for", "lab", "ppt", "pdf", "monday", "tuesday", "wednesday", "thursday", "friday",
+               "saturday", "sunday", "january", "february", "march", "april", "may", "june", "july", "august",
+               "september", "october", "november", "december", "python", "java", "internship", "hackathon", "project",
+               "record", "student", "experimental", "independence", "diwali", "holi", "upi", "excel", "word"}
+
+
 def sane(label: dict, prompt: str, n_open: int) -> str:
     """'' if the label is usable, else why not."""
     for t in label.get("tasks") or []:
@@ -188,7 +199,7 @@ def sane(label: dict, prompt: str, n_open: int) -> str:
             return "title length"
         # names in a title must come from the input (the rule small models break most)
         for w in re.findall(r"\b[A-Z][a-z]{2,}\b", title)[1:]:
-            if w.lower() not in prompt.lower() and w.lower() not in {"the", "and", "for", "lab", "ppt", "pdf"}:
+            if w.lower() not in prompt.lower() and w.lower() not in TITLE_WORDS:
                 return f"invented name {w}"
     for n in (label.get("done") or []) + [u.get("n") for u in label.get("update") or []]:
         if not isinstance(n, int) or not 1 <= n <= n_open:
