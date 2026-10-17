@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-17 ~00:55 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-17 ~15:30 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -55,7 +55,11 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
 - Policy fixes 2026-10-17: a held card goes to PAA's next ready job (`0899ab3`); a hold is ended directly (its SIGUSR1
   never arrived -> PAA briefly used 5 cards), stale pauses re-asked after 10 min (`b8931f6`). Keep files LF (Python
   write_text on Windows writes CRLF — fix with `sed -i 's/\r$//'`).
-- **Running/queued:** `data-v2` (20k, gpu 6, started 00:49 IST) -> `chain-1b-v2` / `chain-270m-v2` -> `export-*-v2`.
+- **v2 done 2026-10-17 (data-v2 13,918 kept of 20k; test n=436):** 1B: has_task .93, count .92, false 3.7%, missed 3.2%,
+  title F1 .78, when .72, 10/12. 270M: json .998, has_task .90, count .88, false 4.1%, missed 6.0%, title .74, when .64,
+  10/12 (270M gained little from more data). Same 2 scenarios fail -> v3 needs targeted generation for them; also the
+  "invented name" filter wrongly rejects words like Friday/October/Python (~100 ex). Bundles in `models/export-*-v2/`.
+  Queue empty; `chain-270m-v2` holds gpu 7 (owner decides on release). AIModel PR #111 (PAA jobs in monitor) merged.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 
