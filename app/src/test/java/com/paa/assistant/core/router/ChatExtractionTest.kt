@@ -11,10 +11,10 @@ class ChatExtractionTest {
     private val parser = LocalTaskParser()
     private val extractor = CommitmentExtractor(parser)
 
-    /** The next upcoming occurrence of h:m on a 12-hour clock (AM or PM, whichever comes first). */
+    /** The next upcoming occurrence of h:m on a 12-hour clock (AM or PM, whichever comes first; 1–6 is always PM). */
     private fun nextUpcoming(h: Int, m: Int): Long {
         val now = System.currentTimeMillis()
-        for (day in 0..1) for (hour in listOf(h % 12, h % 12 + 12)) {
+        for (day in 0..1) for (hour in if (h % 12 in 1..6) listOf(h % 12 + 12) else listOf(h % 12, h % 12 + 12)) {
             val c = Calendar.getInstance().apply {
                 add(Calendar.DAY_OF_YEAR, day); set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, m)
                 set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)

@@ -446,12 +446,12 @@ class LocalTaskParser @Inject constructor() {
         val nowMs = System.currentTimeMillis()
         if (t.ambiguous) {
             // No am/pm and no day word: the next upcoming occurrence of that clock time
-            // (at 11 AM, "315" = 3:15 PM today; at 10 PM, "140" = 1:40 AM tomorrow)
+            // (at 11 AM, "315" = 3:15 PM today; at 10 PM, "140" = 1:40 PM tomorrow)
             val h = t.hour % 12
             for (dayOffset in 0..1) {
-                // A whole hour 1–6 ("4 baje", "at 5") is afternoon/evening — nobody means 4 AM.
-                // Compact times with minutes keep both ("140" late at night = 1:40 AM).
-                val options = if (t.minute == 0 && h in 1..6) listOf(h + 12) else listOf(h, h + 12)
+                // 1–6 without am/pm ("4 baje", "at 5", "140", "315") is afternoon — nobody's deadline is 3:15 AM
+                // (a midnight phone test made "send the ppt at 315" due 3:15 AM).
+                val options = if (h in 1..6) listOf(h + 12) else listOf(h, h + 12)
                 for (candidate in options) {
                     val c = (cal.clone() as Calendar).apply {
                         add(Calendar.DAY_OF_YEAR, dayOffset)
