@@ -69,8 +69,8 @@ def main():
     mod = CONV
     cmd = [sys.executable, "-m", mod,
            f"--model_size={a.size}", f"--checkpoint_path={a.model}", f"--output_path={work}",
-           "--output_name_prefix=paa", f"--prefill_seq_lens={a.prefill}", f"--kv_cache_max_len={a.kv}",
-           f"--quantize={a.quantize}"]
+           "--output_name_prefix=paa", f"--kv_cache_max_len={a.kv}", f"--quantize={a.quantize}"]
+    cmd += [f"--prefill_seq_lens={n}" for n in a.prefill.split(",") if n]    # absl multi_integer: one flag per value
     print("converting:", " ".join(cmd), flush=True)
     if subprocess.run(cmd).returncode != 0:
         subprocess.run([sys.executable, "-m", mod, "--helpfull"])
