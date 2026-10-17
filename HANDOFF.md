@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-17 ~15:30 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-17 ~17:30 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -60,6 +60,13 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
   10/12 (270M gained little from more data). Same 2 scenarios fail -> v3 needs targeted generation for them; also the
   "invented name" filter wrongly rejects words like Friday/October/Python (~100 ex). Bundles in `models/export-*-v2/`.
   Queue empty; `chain-270m-v2` holds gpu 7 (owner decides on release). AIModel PR #111 (PAA jobs in monitor) merged.
+- **Phone tests 2026-10-17 (adb 192.168.1.3:35399, re-paired; app was freshly installed, owner granted notification +
+  accessibility):** eval_chats on phone: 270M v1 11/15 (~0.75 GB, ~5 s/msg); 1B v2 int8 made the phone lag (1.5-1.8 GB,
+  stopped); **1B v2 4-bit (`export-1b-v2-q4`, 574 MB) 12/15, peak ~1.1 GB, ~7 s/msg -> installed now.** Fails: two tasks
+  in one message get merged/dropped (hinglish_two_tasks, own_promise) -> weight that category up in v4 data;
+  done_reply_closes ("10 final na ??"). GPU: fails even for Google's official .task ("GPU accelerator could not be
+  loaded" — accelerator .so missing from the APK); GPU only speeds prefill, not decode -> parked.
+  Export defaults now 4-bit, prefill 32/128/512, KV 768 (`2eb30b8`); v3 exports use it. data-v3 (25k, seed 3) running.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 

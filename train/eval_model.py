@@ -125,13 +125,18 @@ def main():
     dt = {"dtype": torch.bfloat16} if (major, minor) >= (4, 56) else {"torch_dtype": torch.bfloat16}
     model = AutoModelForCausalLM.from_pretrained(a.model, **dt).to("cuda" if torch.cuda.is_available() else "cpu").eval()
     rows = [json.loads(l) for l in (Path(a.data) / "test.jsonl").open(encoding="utf-8")][:a.limit]
-    syn = score_synthetic(rows, generate(model, tok, [record_prompt(r) for r in rows]))
+    syn_outs = generate(model, tok, [record_prompt(r) for r in rows])
+    syn = score_synthetic(rows, syn_outs)
     cases = scenario_cases()
     outs = generate(model, tok, [p for _, p, _ in cases])
     sc = {cid: check(exp, first_json(o)) for (cid, _, exp), o in zip(cases, outs)}
     res = {"model": a.model, "synthetic": syn, "scenarios_passed": f"{sum(sc.values())}/{len(sc)}", "scenarios": sc}
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / "eval.json").write_text(json.dumps(res, indent=1))
+    bad = [{"id": r.get("id"), "category": r.get("category"), "message": r.get("message"), "output": o, "target": r["target"]}
+           for r, o in zip(rows, syn_outs) if not isinstance(first_json(o), dict)]
+    with (Path(a.out) / "json_failures.jsonl").open("w", encoding="utf-8") as f:   # outputs that weren't valid JSON
+        f.writelines(json.dumps(b, ensure_ascii=False) + "\n" for b in bad)
     print("eval", json.dumps(res), flush=True)
 
 
