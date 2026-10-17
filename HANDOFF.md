@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-17 ~17:30 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-18 ~00:10 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -67,6 +67,14 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
   done_reply_closes ("10 final na ??"). GPU: fails even for Google's official .task ("GPU accelerator could not be
   loaded" — accelerator .so missing from the APK); GPU only speeds prefill, not decode -> parked.
   Export defaults now 4-bit, prefill 32/128/512, KV 768 (`2eb30b8`); v3 exports use it. data-v3 (25k, seed 3) running.
+- **v3 (2026-10-17, data-v3 18,090 kept of 25k, test n=557; UNPADDED eval):** 1B v3: json 1.0, has_task .94, count .93,
+  false 2.2%, missed 3.6%, title F1 .82, when .75, 11/12 (only hackathon_link_random_group fails) — best so far.
+  270M v3: has_task .92, count .90, false 3.8%, missed 4.1%, title .79, when .69, 11/12. 4-bit bundles in
+  `models/export-*-v3/` (1B 574 MB, 270M 160 MB). **Eval bug found:** batched left-padded generation garbled the first
+  token of ~7% of Gemma 3 outputs (json_ok 0.93) -> `eval_model.py` now runs batch 1 by default. v1/v2 numbers above
+  came from the batched eval. GPU: PAA holds no card (queue empty), LocalAI has it.
+- **Next:** phone eval of 1B v3 4-bit (ask owner if phone is free; replaces v2-q4 if >12/15); v4 data = more
+  "two tasks in one message" + hackathon-link-in-random-group; then P1 app work (`docs/build/STATUS.md`).
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 
