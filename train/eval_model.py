@@ -30,7 +30,7 @@ from gen_data import first_json, words  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def generate(model, tok, prompts, batch=32):
+def generate(model, tok, prompts, batch=1):
     outs = []
     tok.padding_side = "left"
     for i in range(0, len(prompts), batch):
@@ -119,7 +119,7 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=600)
-    ap.add_argument("--batch", type=int, default=32, help="1 = no padding (how the phone runs it)")
+    ap.add_argument("--batch", type=int, default=1, help="1 = no padding, as on the phone (batched left-padding garbled ~7% of Gemma 3 outputs)")
     a = ap.parse_args()
     tok = AutoTokenizer.from_pretrained(a.model)
     major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
