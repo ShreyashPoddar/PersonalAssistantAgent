@@ -93,23 +93,29 @@ def scenario_cases():
         burst = len(texts) > 1
         msg = "\n".join(f"{who}: {t}" for t in texts) if burst else texts[0]
         ctx = {"chat_name": s["chat"], "sender": s.get("sender") if s.get("group") else s["chat"],
-               "is_group": bool(s.get("group")), "burst": burst}
+               "is_group": bool(s.get("group")), "burst": burst,
+               "outgoing": not burst and any(st.get("out") for st in steps if "text" in st)}   # the owner's own message
         cases.append((s["id"], build_prompt(msg, ctx, datetime(2026, 10, 12, 18, 0), ["shreyash", "shreyas"], 2028), s["expect"]))
     return cases
 
 
 def check(expect, verdict):
     tasks = (verdict or {}).get("tasks") or []
+    used = set()                                   # each expected task needs its OWN task (a merged title fails, as on the phone)
     for e in expect:
         if "no" in e and tasks:
             return False
         if e.get("contains"):
             kw = e.get("keyword", "").lower()
-            hit = [t for t in tasks if kw in str(t.get("title", "")).lower()]
+            hit = [i for i, t in enumerate(tasks) if i not in used and kw in str(t.get("title", "")).lower()]
             if not hit:
                 return False
-            if any(k.startswith("due_") for k in e) and not any(t.get("when") for t in hit):
-                return False
+            if any(k.startswith("due_") for k in e):
+                hit = [i for i in hit if tasks[i].get("when")]
+                if not hit:
+                    return False
+            if len([x for x in expect if x.get("contains")]) > 1:
+                used.add(hit[0])
     return True
 
 
