@@ -3,7 +3,8 @@
 
     python train/export_task.py --model <train out>/model --size 1b --out <dir>        # -> <dir>/paa-tasks-1b.task
 
-Steps: litert-torch (formerly ai-edge-torch) converts the PyTorch weights to a quantized .tflite (dynamic_int8 by default), then the
+Steps: litert-torch (formerly ai-edge-torch) converts the PyTorch weights to a quantized .tflite (4-bit dynamic_int4_block32 by default:
+half the size and RAM of int8; on the phone 12/15 scenarios, ~1.1 GB peak, ~7 s/message — 2026-10-17), then the
 MediaPipe bundler packs it with the SentencePiece tokenizer. The bundle has NO prompt template on purpose: the
 app wraps the turn itself (LocalLlm.wrapTurn), exactly like training did. The file name must start with "paa-":
 that is how the app knows to send the compact prompt.
@@ -56,9 +57,9 @@ def main():
     ap.add_argument("--model", required=True, help="HF-format dir from train_sft.py (<out>/model)")
     ap.add_argument("--size", choices=["270m", "1b"], required=True)
     ap.add_argument("--base", default=None, help="base repo for tokenizer.model (default google/gemma-3-<size>-it)")
-    ap.add_argument("--quantize", default="dynamic_int8", help="litert-torch quant recipe, e.g. dynamic_int8, dynamic_int4_block32")
-    ap.add_argument("--prefill", default="512", help="prefill lengths, comma-separated")
-    ap.add_argument("--kv", type=int, default=1280, help="KV cache length (prompt + answer)")
+    ap.add_argument("--quantize", default="dynamic_int4_block32", help="litert-torch quant recipe, e.g. dynamic_int8, dynamic_int4_block32")
+    ap.add_argument("--prefill", default="32,128,512", help="prefill lengths, comma-separated")
+    ap.add_argument("--kv", type=int, default=768, help="KV cache length (prompt + answer)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--tag", default="", help="suffix for the file name, e.g. v1")
     a = ap.parse_args()
