@@ -119,16 +119,17 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=600)
+    ap.add_argument("--batch", type=int, default=32, help="1 = no padding (how the phone runs it)")
     a = ap.parse_args()
     tok = AutoTokenizer.from_pretrained(a.model)
     major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
     dt = {"dtype": torch.bfloat16} if (major, minor) >= (4, 56) else {"torch_dtype": torch.bfloat16}
     model = AutoModelForCausalLM.from_pretrained(a.model, **dt).to("cuda" if torch.cuda.is_available() else "cpu").eval()
     rows = [json.loads(l) for l in (Path(a.data) / "test.jsonl").open(encoding="utf-8")][:a.limit]
-    syn_outs = generate(model, tok, [record_prompt(r) for r in rows])
+    syn_outs = generate(model, tok, [record_prompt(r) for r in rows], a.batch)
     syn = score_synthetic(rows, syn_outs)
     cases = scenario_cases()
-    outs = generate(model, tok, [p for _, p, _ in cases])
+    outs = generate(model, tok, [p for _, p, _ in cases], a.batch)
     sc = {cid: check(exp, first_json(o)) for (cid, _, exp), o in zip(cases, outs)}
     res = {"model": a.model, "synthetic": syn, "scenarios_passed": f"{sum(sc.values())}/{len(sc)}", "scenarios": sc}
     Path(a.out).mkdir(parents=True, exist_ok=True)
