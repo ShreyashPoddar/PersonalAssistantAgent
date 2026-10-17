@@ -36,4 +36,5 @@ jobs:
   - {id: export-1b-v3, step: export, ref: 2eb30b8a979c, after: train-1b-v3, args: "--size 1b --tag v3"}
   - {id: export-270m-v3, step: export, ref: 2eb30b8a979c, after: train-270m-v3, args: "--size 270m --tag v3"}
   - {id: export-1b-v2-q4b, step: export, ref: 91e10fe3cdde, out: export-1b-v2-q4, after: train-1b-v2, args: "--size 1b --tag v2q4 --quantize dynamic_int4_block32 --prefill 32,128,512 --kv 768"}
+  - {id: eval-1b-v3-dbg, step: eval, ref: f9716d264b4f, out: eval-1b-v3-dbg, after: train-1b-v3}
 control: {status: 13, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3], stop: []}
