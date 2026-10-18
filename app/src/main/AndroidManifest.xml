@@ -88,6 +88,12 @@
 
         <!-- ====== VOICE OVERLAY ACTIVITY (Translucent, shown over other apps) ====== -->
         <activity
+            android:name=".core.agent.ConfirmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.PAA.Overlay" />
+
+        <activity
             android:name=".ui.overlay.VoiceOverlayActivity"
             android:exported="true"
             android:theme="@style/Theme.PAA.Overlay"
