@@ -21,5 +21,10 @@ class AgentSettings @Inject constructor(@ApplicationContext private val ctx: Con
         get() = prefs.getBoolean("paused", false)
         set(v) = prefs.edit().putBoolean("paused", v).apply()
 
+    /** Owner's choice: the first message to a contact needs no fingerprint (the contact counts as messaged before). */
+    var trustAllContacts: Boolean
+        get() = prefs.getBoolean("trust_all_contacts", false)
+        set(v) = prefs.edit().putBoolean("trust_all_contacts", v).apply()
+
     fun voiceLockOn(): Boolean = VoicePrint.isOn(ctx)
 }

@@ -47,8 +47,16 @@ import javax.inject.Inject
 @HiltViewModel
 class ActivityViewModel @Inject constructor(
     audit: AuditDao,
-    private val rules: ContactRuleDao
+    private val rules: ContactRuleDao,
+    private val settings: com.paa.assistant.core.agent.AgentSettings
 ) : ViewModel() {
+    val trustAll = kotlinx.coroutines.flow.MutableStateFlow(settings.trustAllContacts)
+
+    fun setTrustAll(on: Boolean) {
+        settings.trustAllContacts = on
+        trustAll.value = on
+    }
+
     val recent = audit.recent(50)
     val contactRules = rules.all()
 
@@ -84,6 +92,18 @@ fun ActivityCard(
                 TextButton(onClick = { showRules = true }, contentPadding = PaddingValues(0.dp)) {
                     Text("Contact rules", color = accentColor, fontSize = 12.sp)
                 }
+            }
+            val trustAll by vm.trustAll.collectAsStateWithLifecycle()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Trust all my contacts", color = textPrimary, fontSize = 12.sp)
+                    Text(
+                        "No fingerprint for the first message to someone — you only check the popup and tap Send. " +
+                            "Voice commands still need a fingerprint until \"Only my voice\" is on.",
+                        color = textSecondary, fontSize = 11.sp
+                    )
+                }
+                androidx.compose.material3.Switch(checked = trustAll, onCheckedChange = vm::setTrustAll)
             }
             if (expanded) {
                 if (entries.isEmpty()) Text("Nothing yet.", color = textSecondary, fontSize = 11.sp)

@@ -23,7 +23,7 @@ class GuardTest {
     private data class Case(
         val name: String, val a: Action, val s: CommandSource, val expected: Verdict,
         val pre: Boolean = false, val lockdown: Boolean = false, val paused: Boolean = false,
-        val voiceLock: Boolean = true, val rule: ContactRuleEntity? = null
+        val voiceLock: Boolean = true, val rule: ContactRuleEntity? = null, val trustAll: Boolean = false
     )
 
     private val allow = Verdict.Allow
@@ -61,6 +61,12 @@ class GuardTest {
         Case("voice, no voice lock, PREVIEW -> fingerprint", msg, OWNER_VOICE, finger, voiceLock = false, rule = rule()),
         Case("voice with voice lock, AUTO", msg, OWNER_VOICE, allow, rule = rule("AUTO")),
         Case("voice with voice lock, PREVIEW", msg, OWNER_VOICE, tap, rule = rule()),
+        // Owner's "trust all my contacts"
+        Case("trust all: no rule, tapped Send", msg, OWNER_UI, allow, pre = true, trustAll = true),
+        Case("trust all: no rule, not previewed", msg, OWNER_UI, tap, trustAll = true),
+        Case("trust all: voice without voice lock still fingerprint", msg, OWNER_VOICE, finger, pre = true, voiceLock = false, trustAll = true),
+        Case("trust all: ALWAYS_ASK still fingerprint", msg, OWNER_UI, finger, pre = true, rule = rule("ALWAYS_ASK", before = false), trustAll = true),
+        Case("trust all: chat-triggered still denied", msg, SYSTEM_EVENT, Verdict.Deny("Messages only on the owner's command"), trustAll = true),
         // 7. MONEY
         Case("order from UI", order, OWNER_UI, finger),
         Case("order pre-confirmed still fingerprint", order, OWNER_VOICE, finger, pre = true),
@@ -71,7 +77,7 @@ class GuardTest {
     @Test
     fun policyTable() {
         for (c in cases) {
-            assertEquals(c.name, c.expected, Guard.decide(c.a, c.s, c.pre, c.lockdown, c.paused, c.voiceLock, c.rule))
+            assertEquals(c.name, c.expected, Guard.decide(c.a, c.s, c.pre, c.lockdown, c.paused, c.voiceLock, c.rule, c.trustAll))
         }
     }
 

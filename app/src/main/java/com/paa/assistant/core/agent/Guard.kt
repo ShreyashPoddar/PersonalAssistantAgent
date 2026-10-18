@@ -16,7 +16,10 @@ sealed class Verdict {
 class Guard @Inject constructor(private val settings: AgentSettings, private val rules: ContactRuleDao) {
 
     suspend fun check(action: Action, source: CommandSource, preConfirmed: Boolean = false): Verdict =
-        decide(action, source, preConfirmed, settings.lockdown, settings.paused, settings.voiceLockOn(), ruleFor(action))
+        decide(
+            action, source, preConfirmed, settings.lockdown, settings.paused, settings.voiceLockOn(), ruleFor(action),
+            settings.trustAllContacts
+        )
 
     private suspend fun ruleFor(a: Action) = contactKey(a)?.let { rules.get(it) }
 
@@ -26,7 +29,7 @@ class Guard @Inject constructor(private val settings: AgentSettings, private val
         /** Pure policy — unit-tested. Rules are checked in this order. */
         fun decide(
             a: Action, s: CommandSource, preConfirmed: Boolean, lockdown: Boolean, paused: Boolean,
-            voiceLock: Boolean, rule: ContactRuleEntity?
+            voiceLock: Boolean, rule: ContactRuleEntity?, trustAll: Boolean = false
         ): Verdict {
             if (a.tier == RiskTier.SOS) return if (s in OWNER) Verdict.Allow else Verdict.Deny("SOS only from the owner")
             if (paused) return Verdict.Deny("PAA is paused")
@@ -35,23 +38,26 @@ class Guard @Inject constructor(private val settings: AgentSettings, private val
             }
             return when (a.tier) {
                 RiskTier.READ, RiskTier.PRIVATE_REVERSIBLE -> Verdict.Allow
-                RiskTier.OUTWARD -> outward(a, s, preConfirmed, voiceLock, rule)
+                RiskTier.OUTWARD -> outward(a, s, preConfirmed, voiceLock, rule, trustAll)
                 RiskTier.MONEY ->
                     if (s in OWNER) Verdict.Confirm(biometric = true) else Verdict.Deny("Payments only on the owner's command")
                 RiskTier.SOS -> Verdict.Allow  // handled above
             }
         }
 
-        private fun outward(a: Action, s: CommandSource, preConfirmed: Boolean, voiceLock: Boolean, rule: ContactRuleEntity?): Verdict {
+        private fun outward(
+            a: Action, s: CommandSource, preConfirmed: Boolean, voiceLock: Boolean, rule: ContactRuleEntity?, trustAll: Boolean
+        ): Verdict {
             if (s == CommandSource.SYSTEM_EVENT) {
                 // The existing "busy on a call" auto-reply.
                 return if (rule?.autoReplyDuringCall == true && a is Action.SendMessage) Verdict.Allow
                 else Verdict.Deny("Messages only on the owner's command")
             }
             val v = when {
-                rule == null || !rule.messagedBefore -> Verdict.Confirm(biometric = true)  // first time to this contact
-                rule.outward == "ALWAYS_ASK" -> Verdict.Confirm(biometric = true)
-                rule.outward == "AUTO" -> Verdict.Allow
+                // First time to this contact, unless the owner chose to trust all contacts
+                !trustAll && (rule == null || !rule.messagedBefore) -> Verdict.Confirm(biometric = true)
+                rule?.outward == "ALWAYS_ASK" -> Verdict.Confirm(biometric = true)
+                rule?.outward == "AUTO" -> Verdict.Allow
                 else -> if (preConfirmed) Verdict.Allow else Verdict.Confirm(biometric = false)  // PREVIEW
             }
             // Anyone near the phone could have spoken.
