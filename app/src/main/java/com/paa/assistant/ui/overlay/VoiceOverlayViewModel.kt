@@ -229,11 +229,16 @@ class VoiceOverlayViewModel @Inject constructor(
             if (Regex("^(send|send it|yes|haan|ha|bhej do|bhejo|bhej de|ok send)\\b").containsMatchIn(said)) { confirmSend(); return }
             if (Regex("^(cancel|no|nahi|mat bhejo|don'?t)\\b").containsMatchIn(said)) { cancelSend(); return }
         }
-        commandSource = if (spoken) com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+        val now = System.currentTimeMillis()
+        val wake = com.paa.assistant.services.WakeListenerService
+        val locked = repository.context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+        // Spoken into a popup the owner opened by touch on an unlocked phone = as good as typed. Hands-free
+        // ("Oyee PA") or from the lock screen = anyone near the phone could have said it.
+        val handsFree = now - wake.wakeOpenedAt < 60_000L
+        commandSource = if (spoken && (handsFree || locked)) com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
-        commandVoiceVerified = spoken &&
-            System.currentTimeMillis() - com.paa.assistant.services.WakeListenerService.verifiedWakeAt < 60_000L
+        commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
         // Owner's screen-reading switch ("banking mode") — a local setting, not an Action
         com.paa.assistant.core.shield.A11yToggle.voiceCommand(input)?.let { on ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")

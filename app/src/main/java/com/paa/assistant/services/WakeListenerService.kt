@@ -435,6 +435,7 @@ class WakeListenerService : Service() {
 
     /** Outside a call: open the voice popup (needs "Display over other apps", else a tap-to-open alert). */
     private fun openVoicePopup() {
+        wakeOpenedAt = System.currentTimeMillis()
         transcript.clear()
         stopListening()  // free the microphone for the popup
         val intent = Intent(this, VoiceOverlayActivity::class.java)
@@ -472,6 +473,10 @@ class WakeListenerService : Service() {
     companion object {
         /** When "Oyee PA" last matched the owner's voiceprint. In-process only, so no other app can claim it. */
         @Volatile var verifiedWakeAt = 0L
+            private set
+
+        /** When "Oyee PA" (matched or not) last opened the popup — a hands-free open, so no touch proves the owner. */
+        @Volatile var wakeOpenedAt = 0L
             private set
 
         private const val TAG = "PAA_Wake"
