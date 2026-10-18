@@ -37,6 +37,7 @@ class PAAApplication : Application(), Configuration.Provider {
         // Keep 90 days of the action audit log
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             runCatching { auditDao.deleteOlderThan(System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000) }
+            runCatching { com.paa.assistant.core.agent.AutoReplyRules.sync(contactRuleDao, com.paa.assistant.core.profile.UserProfile.autoReplyContacts) }
         }
         // Re-apply current alarm rules (e.g. the 7 AM–7 PM ringing window) to all pending tasks
         WorkManager.getInstance(this).enqueueUniqueWork(
@@ -48,6 +49,9 @@ class PAAApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var auditDao: com.paa.assistant.data.db.AuditDao
+
+    @Inject
+    lateinit var contactRuleDao: com.paa.assistant.data.db.ContactRuleDao
 
     @Inject
     lateinit var localLlm: com.paa.assistant.core.ai.LocalLlm

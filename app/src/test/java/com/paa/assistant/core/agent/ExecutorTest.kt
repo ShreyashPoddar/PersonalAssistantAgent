@@ -21,13 +21,6 @@ class ExecutorTest {
         override suspend fun deleteOlderThan(time: Long) { entries.removeAll { it.at < time } }
     }
 
-    private class FakeRules : ContactRuleDao {
-        val map = mutableMapOf<String, ContactRuleEntity>()
-        override suspend fun get(key: String) = map[key]
-        override suspend fun upsert(rule: ContactRuleEntity) { map[rule.contactKey] = rule }
-        override fun all(): Flow<List<ContactRuleEntity>> = flowOf(map.values.toList())
-    }
-
     private class FakeSkill(private val result: ActionResult = ActionResult(true, "Sent")) : Skill<Action> {
         var runs = 0
         override suspend fun run(action: Action): ActionResult { runs++; return result }

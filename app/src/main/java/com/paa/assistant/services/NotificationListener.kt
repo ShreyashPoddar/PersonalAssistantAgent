@@ -25,6 +25,7 @@ class NotificationListener : NotificationListenerService() {
 
     @Inject lateinit var processor: ChatMessageProcessor
     @Inject lateinit var callRecordings: CallRecordingProcessor
+    @Inject lateinit var executor: com.paa.assistant.core.agent.Executor
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -107,10 +108,18 @@ class NotificationListener : NotificationListenerService() {
             listOf(Msg(body, title, sbn.postTime, fromSelf = false))
         }
 
-        // Owner on a phone call: listed contacts get one "will call you back"
+        // Owner on a phone call: contacts with the auto-reply rule get one "will call you back" (the Guard checks the rule)
         if (!isGroup && chatName != null && newMessages.any { !it.fromSelf } &&
-            getSystemService(android.media.AudioManager::class.java).mode == android.media.AudioManager.MODE_IN_CALL
-        ) com.paa.assistant.core.messaging.WhatsAppSender.autoReplyDuringCall(this, chatName)
+            getSystemService(android.media.AudioManager::class.java).mode == android.media.AudioManager.MODE_IN_CALL &&
+            com.paa.assistant.core.messaging.WhatsAppSender.autoReplyDue(this, chatName)
+        ) scope.launch {
+            val sender = com.paa.assistant.core.messaging.WhatsAppSender
+            val r = executor.submit(
+                com.paa.assistant.core.agent.Action.SendMessage("WhatsApp", "", chatName, sender.AUTO_REPLY_TEXT),
+                com.paa.assistant.core.agent.CommandSource.SYSTEM_EVENT
+            )
+            if (r.ok) sender.markAutoReplied(this@NotificationListener, chatName)
+        }
 
         for (m in newMessages) {
             if (m.text.isBlank() || systemText.containsMatchIn(m.text.trim())) continue

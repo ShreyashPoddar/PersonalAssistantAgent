@@ -47,21 +47,28 @@ object WhatsAppSender {
         return result
     }
 
+    const val AUTO_REPLY_TEXT = "I'm on a call right now, will call you back soon. (auto-reply)"
+
     /**
-     * Auto-reply while the owner is on a call — only to contacts they listed, once per contact per hour,
-     * counted against [DAILY_LIMIT]. Uses the notification's reply button only (no screen needed).
+     * Auto-reply while the owner is on a call: once per contact per hour, counted against [DAILY_LIMIT].
+     * Which contacts get it is the Guard's call (contact rule `autoReplyDuringCall`).
      */
-    fun autoReplyDuringCall(context: Context, chatName: String): Boolean {
-        val listed = com.paa.assistant.core.profile.UserProfile.autoReplyContacts.any { it.equals(chatName, ignoreCase = true) }
-        if (!listed || sentToday(context) >= DAILY_LIMIT) return false
+    fun autoReplyDue(context: Context, chatName: String): Boolean {
+        if (sentToday(context) >= DAILY_LIMIT) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val key = "auto_" + chatName.lowercase().hashCode()
-        if (System.currentTimeMillis() - prefs.getLong(key, 0) < 3_600_000L) return false
-        val text = "I'm on a call right now, will call you back soon. (auto-reply)"
-        if (!replyViaNotification(context, chatName, text)) return false
-        prefs.edit().putLong(key, System.currentTimeMillis()).apply()
+        return System.currentTimeMillis() - prefs.getLong(autoKey(chatName), 0) >= 3_600_000L
+    }
+
+    fun markAutoReplied(context: Context, chatName: String) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(autoKey(chatName), System.currentTimeMillis()).apply()
+
+    private fun autoKey(chatName: String) = "auto_" + chatName.lowercase().hashCode()
+
+    /** Reply in a chat through its notification only (no phone number, no screen needed). */
+    fun replyInChat(context: Context, chatName: String, text: String, logResult: String = "📤 sent by PAA"): Boolean {
+        if (sentToday(context) >= DAILY_LIMIT || !replyViaNotification(context, chatName, text)) return false
         countSent(context)
-        DetectionLog.add("→ $chatName", text, "📤 auto-reply (you were on a call)")
+        DetectionLog.add("→ $chatName", text, logResult)
         return true
     }
 

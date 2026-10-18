@@ -17,6 +17,9 @@ interface ContactRuleDao {
     @Upsert
     suspend fun upsert(rule: ContactRuleEntity)
 
+    @Query("SELECT * FROM contact_rules WHERE autoReplyDuringCall = 1")
+    suspend fun autoReplyOn(): List<ContactRuleEntity>
+
     @Query("SELECT * FROM contact_rules ORDER BY contactKey")
     fun all(): Flow<List<ContactRuleEntity>>
 }

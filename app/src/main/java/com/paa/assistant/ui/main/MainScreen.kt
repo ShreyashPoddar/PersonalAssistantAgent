@@ -45,6 +45,7 @@ import com.paa.assistant.ui.overlay.VoiceOverlayActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -431,6 +432,10 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                         up.save(context, names, year.toIntOrNull() ?: up.GRADUATION_YEAR, groups,
                                             start.toIntOrNull() ?: up.ALARM_START_HOUR, end.toIntOrNull() ?: up.ALARM_END_HOUR,
                                             groupMin.toIntOrNull() ?: up.GROUP_REQUEST_DEFAULT_MINUTES, autoReply)
+                                        val rulesDao = com.paa.assistant.data.db.AppDatabase.getInstance(context).contactRuleDao()
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            com.paa.assistant.core.agent.AutoReplyRules.sync(rulesDao, up.autoReplyContacts)
+                                        }
                                         editMe = false
                                     }) { Text("Save") }
                                 },

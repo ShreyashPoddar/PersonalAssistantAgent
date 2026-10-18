@@ -67,7 +67,8 @@ class VoiceOverlayViewModel @Inject constructor(
     private val storageManager: StorageManager,
     private val calendarManager: CalendarManager,
     private val geofenceManager: GeofenceManager,
-    private val claude: com.paa.assistant.core.ai.ClaudeClient
+    private val claude: com.paa.assistant.core.ai.ClaudeClient,
+    private val executor: com.paa.assistant.core.agent.Executor
 ) : ViewModel() {
 
     private val tag = "VoiceOverlayVM"
@@ -311,13 +312,10 @@ class VoiceOverlayViewModel @Inject constructor(
             LocalIntent.QUERY_AGENDA -> localExecutor.listTasks(result.timestamp)
             LocalIntent.SET_TIMER -> {
                 result.timestamp?.let { ts ->
-                    val task = TaskEntity(
-                        title = result.taskTitle ?: "Alarm",
-                        dueTimestamp = ts,
-                        priority = 2
-                    )
-                    repository.createTask(task)
-                    "Alarm set! I'll remind you at the scheduled time."
+                    executor.submit(
+                        com.paa.assistant.core.agent.Action.SetAlarm(ts, result.taskTitle ?: "Alarm"),
+                        com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+                    ).message
                 } ?: "I couldn't understand the time. Please try again."
             }
             LocalIntent.DELETE_TASK -> {
@@ -476,13 +474,14 @@ class VoiceOverlayViewModel @Inject constructor(
         val p = _uiState.value.pendingSend ?: return
         val to = contact ?: p.contact
         _uiState.value = _uiState.value.copy(pendingSend = null)
-        val result = com.paa.assistant.core.messaging.WhatsAppSender.send(repository.context, to, p.text)
-        deliverResponse(when (result) {
-            com.paa.assistant.core.messaging.WhatsAppSender.Result.SENT -> "📤 Sent to ${to.name}."
-            com.paa.assistant.core.messaging.WhatsAppSender.Result.OPENED_FOR_TAP -> "Your phone is locked — tap the notification to send it to ${to.name}."
-            com.paa.assistant.core.messaging.WhatsAppSender.Result.LIMIT_REACHED -> "I've already sent ${com.paa.assistant.core.messaging.WhatsAppSender.DAILY_LIMIT} messages today — that's the daily limit."
-            com.paa.assistant.core.messaging.WhatsAppSender.Result.FAILED -> "Couldn't send it."
-        })
+        // The popup already showed the exact text and the owner tapped Send, so it counts as previewed.
+        viewModelScope.launch {
+            val result = executor.submit(
+                com.paa.assistant.core.agent.Action.SendMessage("WhatsApp", to.phoneE164, to.name, p.text),
+                com.paa.assistant.core.agent.CommandSource.OWNER_VOICE, preConfirmed = true
+            )
+            deliverResponse(if (result.ok || result.message.startsWith("I've already")) result.message else "Not sent: ${result.message}")
+        }
     }
 
     fun cancelSend() {
