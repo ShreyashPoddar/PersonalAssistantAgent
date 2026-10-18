@@ -11,6 +11,7 @@ import com.paa.assistant.workers.MorningBriefingWorker
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 /**
  * PAA Application class.
@@ -33,6 +34,10 @@ class PAAApplication : Application(), Configuration.Provider {
         com.paa.assistant.services.DetectionLog.init(this)
         com.paa.assistant.core.profile.UserProfile.init(this)
         scheduleProactiveJobs()
+        // Keep 90 days of the action audit log
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching { auditDao.deleteOlderThan(System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000) }
+        }
         // Re-apply current alarm rules (e.g. the 7 AM–7 PM ringing window) to all pending tasks
         WorkManager.getInstance(this).enqueueUniqueWork(
             "paa_reschedule_alarms",
@@ -40,6 +45,9 @@ class PAAApplication : Application(), Configuration.Provider {
             androidx.work.OneTimeWorkRequestBuilder<com.paa.assistant.workers.RescheduleAlarmsWorker>().build()
         )
     }
+
+    @Inject
+    lateinit var auditDao: com.paa.assistant.data.db.AuditDao
 
     @Inject
     lateinit var localLlm: com.paa.assistant.core.ai.LocalLlm
