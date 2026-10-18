@@ -49,4 +49,4 @@ jobs:
   - {id: chain-270m-v5, step: train, ref: 9980338, out: train-270m-v5, after: data-v5, args: "--base google/gemma-3-270m-it --epochs 4 --then-eval eval-270m-v5 --hold"}
   - {id: export-1b-v5, step: export, ref: 9980338, after: train-1b-v5, args: "--size 1b --tag v5"}
   - {id: export-270m-v5, step: export, ref: 9980338, after: train-270m-v5, args: "--size 270m --tag v5"}
-control: {status: 16, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3], stop: [chain-270m-v4, chain-270m-v5]}
+control: {status: 17, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3], stop: [chain-270m-v4, chain-270m-v5]}
