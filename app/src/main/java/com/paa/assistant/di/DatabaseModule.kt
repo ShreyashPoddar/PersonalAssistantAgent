@@ -44,4 +44,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideChatHistoryDao(db: AppDatabase): com.paa.assistant.data.db.ChatHistoryDao = db.chatHistoryDao()
+
+    @Provides
+    @Singleton
+    fun provideContactRuleDao(db: AppDatabase): com.paa.assistant.data.db.ContactRuleDao = db.contactRuleDao()
+
+    @Provides
+    @Singleton
+    fun provideAuditDao(db: AppDatabase): com.paa.assistant.data.db.AuditDao = db.auditDao()
 }

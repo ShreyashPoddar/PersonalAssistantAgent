@@ -17,7 +17,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 
 ## Phase 1 — foundation (`P1_foundation.md`)
 - [x] P1-T1 Action framework types
-- [ ] P1-T2 AgentSettings + ContactRule + Guard (+ DB v6)
+- [x] P1-T2 AgentSettings + ContactRule + Guard (+ DB v6)
 - [ ] P1-T3 BiometricGate + ConfirmActivity
 - [ ] P1-T4 Executor + SkillRegistry + audit log UI
 - [ ] P1-T5 Route existing actions (message/alarm/call/auto-reply) through Executor

@@ -18,8 +18,9 @@ import com.paa.assistant.data.models.TaskFeedbackEntity
  *  - file_index:   SAF URI references for voice-accessible files
  */
 @Database(
-    entities = [TaskEntity::class, MemoryFactEntity::class, FileIndexEntity::class, TaskFeedbackEntity::class, com.paa.assistant.data.models.ChatLineEntity::class],
-    version = 5,
+    entities = [TaskEntity::class, MemoryFactEntity::class, FileIndexEntity::class, TaskFeedbackEntity::class, com.paa.assistant.data.models.ChatLineEntity::class,
+        com.paa.assistant.data.models.ContactRuleEntity::class, com.paa.assistant.data.models.AuditEntryEntity::class],
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fileIndexDao(): FileIndexDao
     abstract fun feedbackDao(): FeedbackDao
     abstract fun chatHistoryDao(): ChatHistoryDao
+    abstract fun contactRuleDao(): ContactRuleDao
+    abstract fun auditDao(): AuditDao
 
     companion object {
         const val DATABASE_NAME = "paa_database"
@@ -65,6 +68,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v6: per-contact rules for outward actions, and the action audit log. */
+        private val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `contact_rules` (`contactKey` TEXT NOT NULL, `outward` TEXT NOT NULL, " +
+                        "`autoReplyDuringCall` INTEGER NOT NULL, `messagedBefore` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`contactKey`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `audit_log` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`at` INTEGER NOT NULL, `actionType` TEXT NOT NULL, `tier` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+                        "`summary` TEXT NOT NULL, `verdict` TEXT NOT NULL, `ok` INTEGER NOT NULL, `resultMessage` TEXT NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -84,7 +103,7 @@ abstract class AppDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(SupportOpenHelperFactory(passphrase.toByteArray()))
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
