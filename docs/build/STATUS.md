@@ -16,7 +16,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] Fill `results/phase0.md` and write the decisions
 
 ## Phase 1 — foundation (`P1_foundation.md`)
-- [ ] P1-T1 Action framework types
+- [x] P1-T1 Action framework types
 - [ ] P1-T2 AgentSettings + ContactRule + Guard (+ DB v6)
 - [ ] P1-T3 BiometricGate + ConfirmActivity
 - [ ] P1-T4 Executor + SkillRegistry + audit log UI
