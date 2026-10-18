@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent)
-Updated 2026-10-18 ~15:10 IST · repo https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`, HEAD `8fafd81` (clean). Older history: `git log -p HANDOFF.md`.
+Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`, HEAD = latest commit (clean). Older history: `git log -p HANDOFF.md`.
 
 ## Goal
 - Owner's words (condensed): automate the whole phone (iQOO Z7 Pro I2301, Android 15, 8 GB): read WhatsApp/other apps
@@ -34,6 +34,16 @@ Updated 2026-10-18 ~15:10 IST · repo https://github.com/ShreyashPoddar/Personal
 - **LocalAI monitor:** AIModel PR #111 (PAA jobs in `live_status.py`) merged; PR #104 (PAA's GPU share) merged.
 - **GPU:** queue empty, PAA holds 0 cards (`chain-270m-v4` stopped 2026-10-18 ~14:55 IST).
 
+- **P1 started (2026-10-18):** T1 Action types, T2 Guard + DB v6 (contact_rules, audit_log; migration checked on
+  emulator and on the phone), T4 Executor + Activity card / Contact rules dialog — done. T3 (fingerprint confirm) and
+  T5 (send/alarm/call/auto-reply via Executor) code + tests done, installed on phone; **need the owner's phone checks**:
+  T3 = PlaceOrder("test","1 item",100) through ConfirmBroker → fingerprint (temporary debug button, remove after);
+  T5 = "Oyee PA, message <test contact> test" → first time asks fingerprint → sends → shows in Activity card.
+  Behaviour change: first message to any contact now needs a fingerprint; auto-reply contacts live in contact_rules.
+- **v5 data round queued** (ref `9980338`): data-v5 (25k, seed 5; new categories: @mention confirm-questions
+  "10 final na ??" as tasks + owner's "Hn bhai" closing them; hackathon-link-in-random-group weight up), then
+  chain-1b-v5 + export-1b-v5. chain-270m-v5 stopped (270M not used on phone). Phone-test export-1b-v5 vs v4, keep better.
+
 ## Decisions
 - Stock **locked** Android 15 + privileged agent app; no custom OS (iQOO bootloader not legitimately unlockable, banking breaks).
 - Banking: never detect/hide from bank apps; owner-controlled "banking mode" switch or separate profile; UPI PIN by owner; fingerprint for payments.
@@ -62,6 +72,8 @@ Updated 2026-10-18 ~15:10 IST · repo https://github.com/ShreyashPoddar/Personal
 - `app/src/main/java/com/paa/assistant/core/router/LocalTaskParser.kt` — CRLF file; keep CRLF when editing.
 
 ## Open issues
+- **PAA accessibility service was OFF on the phone** after the 2026-10-18 install (only Grammarly's enabled) — owner
+  must re-enable (Settings → Accessibility → PAA chat reading); unknown if the reinstall or something earlier turned it off.
 - Phone scenario `done_reply_closes` fails: `@Shreyash Poddar 10 final na ??` → model `no task (AI): No task found.`;
   then own reply `Hn bhai` → `skipped: no task words` (no open task, `ChatMessageProcessor.kt:261`). Expected 📌 then ✅ marked done.
 - DGX scenario `hackathon_link_random_group` still fails for 1B v3/v4 on DGX eval (passes on phone because the app handles hackathon links itself).
@@ -80,8 +92,8 @@ Updated 2026-10-18 ~15:10 IST · repo https://github.com/ShreyashPoddar/Personal
 - Chat/call/bank content never leaves devices; alarms ring 07–19. Names shreyash/shreyas, batch 2028, hackathon group hackstreet_Boys.
 
 ## Next step
-- Start P1 from `docs/build/STATUS.md` / `docs/build/P1_foundation.md` (action framework, Guard, confirm, audit log),
-  building with `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" && ./gradlew -q assembleDebug testDebugUnitTest`.
-  In parallel (no asking needed): queue a v5 data round targeting "confirm-question then 'Hn bhai'" replies + hackathon
-  links in random groups (`python tools/gpu.py add gen_data --id data-v5 --ref <sha> --args "--n 25000 --seed 5"` then
-  `python tools/gpu.py pipeline v5 --parallel --no-data --ref <sha>`), phone-test the 1B export, keep the better one.
+- P1-T6 (screen-reading switch) onward from `docs/build/P1_foundation.md`; build with
+  `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" && ./gradlew -q assembleDebug testDebugUnitTest`.
+- When v5 finishes (`python tools/gpu.py status` / `watch`): fetch export-1b-v5, phone-eval with
+  `tools/eval_chats.py --serial <ip:port>` (watch memory), keep the better of v4/v5. Give the GPU back when done.
+- Ask the owner for the T3/T5 phone checks and to re-enable accessibility.
