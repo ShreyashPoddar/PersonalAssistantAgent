@@ -82,6 +82,12 @@ stop_job() {
     tmux kill-session -t "paa-$1" 2>/dev/null
     echo "exit=stopped" >> "$ROOT/jobs/$1/run.log"
     post "[PAA DGX] stopped \`$1\` (control.stop)."
+  elif [ ! -f "$ROOT/jobs/$1/run.sh" ] && ! grep -qxF "$1" "$STATE" &&
+       [ "$(cut -d$'\x1f' -f1 "$ROOT/queue.parsed" 2>/dev/null | grep -cxF "$1")" -gt 0 ]; then   # -c, not -q: see above
+    # Still queued: never launch it (before, the stop was "seen" here and the job launched later anyway —
+    # chain-270m-v5 held a card all night on 2026-10-18)
+    echo "$1" >> "$STATE"; touch "$ROOT/state_dirty"
+    post "[PAA DGX] cancelled queued \`$1\` (control.stop) — it won't launch."
   else post "[PAA DGX] control.stop: no running job \`$1\`."; fi
 }
 
