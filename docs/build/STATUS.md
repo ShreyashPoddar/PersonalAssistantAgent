@@ -21,7 +21,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [~] P1-T3 BiometricGate + ConfirmActivity — code + tests done; phone fingerprint check pending (owner)
 - [x] P1-T4 Executor + SkillRegistry + audit log UI
 - [~] P1-T5 Route existing actions (message/alarm/call/auto-reply) through Executor — code + tests done, installed; phone voice-send check pending (owner)
-- [ ] P1-T6 Owner-controlled screen-reading switch (tile + settings + voice)
+- [~] P1-T6 Owner-controlled screen-reading switch (tile + settings + voice) — code + tests done, installed; owner check + optional grant pending
 - [ ] P1-T7 Banking-separation guide (no automation)
 - [ ] P1-T8 Instant app launcher
 - [ ] P1-T9 SOS

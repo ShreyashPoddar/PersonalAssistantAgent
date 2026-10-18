@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- CallSkill: place a call directly (else it opens the dialer) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Owner's screen-reading switch only (granted once over adb, owner's choice); else it opens Settings -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <!-- Network for Gemini API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -141,6 +143,17 @@
             android:name=".services.PAATileService"
             android:exported="true"
             android:label="@string/tile_label"
+            android:icon="@drawable/ic_mic"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".core.shield.ScreenReadingTileService"
+            android:exported="true"
+            android:label="PAA screen reading"
             android:icon="@drawable/ic_mic"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

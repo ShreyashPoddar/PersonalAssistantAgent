@@ -219,6 +219,12 @@ class VoiceOverlayViewModel @Inject constructor(
             if (Regex("^(send|send it|yes|haan|ha|bhej do|bhejo|bhej de|ok send)\\b").containsMatchIn(said)) { confirmSend(); return }
             if (Regex("^(cancel|no|nahi|mat bhejo|don'?t)\\b").containsMatchIn(said)) { cancelSend(); return }
         }
+        // Owner's screen-reading switch ("banking mode") — a local setting, not an Action
+        com.paa.assistant.core.shield.A11yToggle.voiceCommand(input)?.let { on ->
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            deliverResponse(com.paa.assistant.core.shield.A11yToggle.applyVoice(repository.context, on))
+            return
+        }
         lastInputPrivate = localOnly
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
