@@ -59,16 +59,29 @@ class MainViewModel @Inject constructor(
         "Oyee P A, kal subah 9 baje class hai",
         "Oyee P A, what is my next task",
         "Oyee P A, notes bhej dena yaad dilana",
+        "Oyee P A, Shreya di ko message karo ki main late hoon",
+        "Oyee P A, set an alarm for 7 in the morning",
         "Mera naam Shreyash hai aur main PAA use karta hoon",
         "Tomorrow I have to submit the assignment before evening",
     )
 
-    /** null = not enrolling; else index of the phrase to read (== size: finishing). */
-    private val _enrolStep = MutableStateFlow<Int?>(null)
-    val enrolStep: StateFlow<Int?> = _enrolStep.asStateFlow()
-    private val _enrolStatus = MutableStateFlow("")
-    val enrolStatus: StateFlow<String> = _enrolStatus.asStateFlow()
-    private val enrolPrints = mutableListOf<FloatArray>()
+    /** What the enrolment / test dialog shows; null = closed. */
+    data class EnrolPrompt(
+        val title: String, val sentence: String?, val status: String,
+        val recordLabel: String?, val skipLabel: String?
+    )
+
+    private val _enrolPrompt = MutableStateFlow<EnrolPrompt?>(null)
+    val enrolPrompt: StateFlow<EnrolPrompt?> = _enrolPrompt.asStateFlow()
+
+    private enum class EnrolPhase { OWNER, OTHERS, TEST }
+    private var enrolPhase = EnrolPhase.OWNER
+    private val ownerPrints = MutableList<FloatArray?>(enrolPhrases.size) { null }
+    private var enrolIndex = 0
+    private val otherPrints = mutableListOf<FloatArray>()
+    private var recording = false
+
+    private val MAX_OTHERS = 3
 
     fun voiceLockOn(): Boolean = com.paa.assistant.core.audio.VoicePrint.isOn(repository.context)
 
@@ -78,59 +91,163 @@ class MainViewModel @Inject constructor(
     }
 
     fun startEnrolment() {
-        enrolPrints.clear()
-        _enrolStatus.value = "Tap Record, then read the sentence aloud in your normal voice."
-        _enrolStep.value = 0
+        for (i in ownerPrints.indices) ownerPrints[i] = null
+        otherPrints.clear()
+        enrolIndex = 0
+        enrolPhase = EnrolPhase.OWNER
         com.paa.assistant.services.WakeListenerService.pauseForPopup(repository.context)  // free the microphone
+        showOwnerStep("Quiet room, phone held like a call. Tap Record, then read the sentence in your normal voice.")
+    }
+
+    /** "Test a voice": anyone speaks for 4 s and sees whether the voice lock would let them in. */
+    fun startVoiceTest() {
+        enrolPhase = EnrolPhase.TEST
+        com.paa.assistant.services.WakeListenerService.pauseForPopup(repository.context)
+        _enrolPrompt.value = EnrolPrompt(
+            "Test a voice", "Oyee P A, what is my next task",
+            "Tap Record and read the sentence. Try it yourself, then let someone else try.", "🎙️ Record (4 s)", null
+        )
     }
 
     fun cancelEnrolment() {
-        _enrolStep.value = null
+        _enrolPrompt.value = null
         com.paa.assistant.services.WakeListenerService.resumeAfterPopup(repository.context)
     }
 
-    /** Records 4 s, turns it into a voiceprint (audio is discarded right away). */
+    /** The dialog's second button: in the "others" step it finishes without (more) other voices. */
+    fun skipEnrolStep() {
+        if (enrolPhase == EnrolPhase.OTHERS) finishEnrolment() else cancelEnrolment()
+    }
+
+    private fun showOwnerStep(status: String) {
+        val done = ownerPrints.count { it != null }
+        _enrolPrompt.value = EnrolPrompt(
+            "Teach PAA your voice (${done + 1}/${enrolPhrases.size})", enrolPhrases[enrolIndex], status,
+            "🎙️ Record (4 s)", "Cancel"
+        )
+    }
+
+    private fun showOthersStep(status: String) {
+        _enrolPrompt.value = EnrolPrompt(
+            "Check that others are rejected (${otherPrints.size}/$MAX_OTHERS)", enrolPhrases[2], status,
+            "🎙️ Record someone else", if (otherPrints.isEmpty()) "Skip (less safe)" else "Finish"
+        )
+    }
+
+    private fun status(s: String) { _enrolPrompt.value = _enrolPrompt.value?.copy(status = s) }
+
+    /** Records 4 s and turns it into a voiceprint; the audio is discarded right away. */
     @android.annotation.SuppressLint("MissingPermission")
-    fun recordEnrolPhrase() {
-        val step = _enrolStep.value ?: return
-        viewModelScope.launch {
-            _enrolStatus.value = "🎙️ Listening… read it now"
+    private suspend fun recordPrint(): Triple<FloatArray?, Int, String?> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val ctx = repository.context
-            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                val model = com.paa.assistant.core.audio.VoskEngine(ctx).loadModel() ?: return@withContext null
-                val spk = com.paa.assistant.core.audio.VoicePrint.speakerModel(ctx) ?: return@withContext null
-                val rate = 16000
-                val pcm = ShortArray(rate * 4)
-                val rec = android.media.AudioRecord(
-                    android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
-                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, rate
-                )
-                try {
-                    rec.startRecording()
-                    var got = 0
-                    while (got < pcm.size) { val n = rec.read(pcm, got, minOf(1600, pcm.size - got)); if (n <= 0) break; got += n }
-                } finally { runCatching { rec.stop() }; rec.release() }
-                com.paa.assistant.core.audio.VoicePrint.of(model, spk, pcm)
-            }
-            val (print, frames) = result ?: (null to 0)
-            if (print == null || frames < com.paa.assistant.core.audio.VoicePrint.MIN_FRAMES) {
-                _enrolStatus.value = "Didn't hear enough — tap Record and read it again, a bit louder."
-                return@launch
-            }
-            enrolPrints += print
-            if (step + 1 < enrolPhrases.size) {
-                _enrolStep.value = step + 1
-                _enrolStatus.value = "✅ Got it (${step + 1}/${enrolPhrases.size}). Next one:"
-            } else {
-                val owner = com.paa.assistant.core.audio.VoicePrint.average(enrolPrints)
-                val selfCheck = enrolPrints.minOf { com.paa.assistant.core.audio.VoicePrint.similarity(it, owner) }
-                com.paa.assistant.core.audio.VoicePrint.save(ctx, owner)
-                _enrolStep.value = null
-                _aiResponse.value = "🔐 Voice lock is on. \"Oyee PA\" now works only for your voice " +
-                    "(your samples matched at %.2f or better; strangers usually score below 0.45).".format(selfCheck)
-                restartWakeListener()
-            }
+            val model = com.paa.assistant.core.audio.VoskEngine(ctx).loadModel()
+                ?: return@withContext Triple(null, 0, "Speech model not ready — try again in a moment.")
+            val spk = com.paa.assistant.core.audio.VoicePrint.speakerModel(ctx)
+                ?: return@withContext Triple(null, 0, "Voice model not ready — try again in a moment.")
+            val rate = 16000
+            val pcm = ShortArray(rate * 4)
+            // Same microphone setting as the "Oyee PA" listener, so enrolment and real use sound alike
+            val rec = android.media.AudioRecord(
+                android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
+                android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, rate
+            )
+            var got = 0
+            try {
+                rec.startRecording()
+                while (got < pcm.size) { val n = rec.read(pcm, got, minOf(1600, pcm.size - got)); if (n <= 0) break; got += n }
+            } finally { runCatching { rec.stop() }; rec.release() }
+            val audio = pcm.copyOf(got)
+            val (print, frames) = com.paa.assistant.core.audio.VoicePrint.of(model, spk, audio) ?: (null to 0)
+            val problem = com.paa.assistant.core.audio.VoiceCalibration.recordingProblem(audio, frames)
+                ?: if (print == null) "Couldn't read a voice from that — try again." else null
+            java.util.Arrays.fill(pcm, 0)
+            Triple(print, frames, problem)
         }
+
+    fun recordEnrolPhrase() {
+        if (recording || _enrolPrompt.value == null) return
+        recording = true
+        viewModelScope.launch {
+            try {
+                status("🎙️ Listening… read it now")
+                val (print, _, problem) = recordPrint()
+                if (problem != null || print == null) { status(problem ?: "Try again."); return@launch }
+                when (enrolPhase) {
+                    EnrolPhase.OWNER -> addOwnerSample(print)
+                    EnrolPhase.OTHERS -> {
+                        otherPrints += print
+                        if (otherPrints.size >= MAX_OTHERS) finishEnrolment()
+                        else showOthersStep("✅ Got it. Another person (or another try from them), or Finish.")
+                    }
+                    EnrolPhase.TEST -> testResult(print)
+                }
+            } finally { recording = false }
+        }
+    }
+
+    private fun addOwnerSample(print: FloatArray) {
+        val cal = com.paa.assistant.core.audio.VoiceCalibration
+        val vp = com.paa.assistant.core.audio.VoicePrint
+        val earlier = ownerPrints.filterNotNull()
+        // From the 3rd sample on, a sample unlike the earlier ones is re-recorded at once (noise, another speaker)
+        if (earlier.size >= 2 && vp.similarity(print, vp.average(earlier)) < cal.MIN_AGREEMENT - 0.10) {
+            showOwnerStep("That didn't sound like your earlier samples (noise, or a different voice?). Read it again, same distance as before.")
+            return
+        }
+        ownerPrints[enrolIndex] = print
+        val next = ownerPrints.indexOfFirst { it == null }
+        if (next >= 0) {
+            enrolIndex = next
+            showOwnerStep("✅ Got it. Next one:")
+            return
+        }
+        // All read: any sample that disagrees with the rest is read again
+        val all = ownerPrints.filterNotNull()
+        cal.outlier(all)?.let { bad ->
+            ownerPrints[bad] = null
+            enrolIndex = bad
+            showOwnerStep("One sample didn't match the others — please read this one again.")
+            return
+        }
+        enrolPhase = EnrolPhase.OTHERS
+        showOthersStep(
+            "Your voice is recorded. Now hand the phone to someone else (or play a video of someone talking) " +
+                "and tap Record. This checks that other voices are rejected and sets how strict PAA is."
+        )
+    }
+
+    private fun finishEnrolment() {
+        val cal = com.paa.assistant.core.audio.VoiceCalibration
+        val vp = com.paa.assistant.core.audio.VoicePrint
+        val all = ownerPrints.filterNotNull()
+        val owner = vp.average(all)
+        val r = cal.calibrate(cal.leaveOneOut(all), otherPrints.map { vp.similarity(it, owner) })
+        if (r.problem != null) {
+            // Not saved: a lock that can't tell the owner from others is worse than none
+            _enrolPrompt.value = EnrolPrompt("Voice lock not turned on", null, r.problem, null, "Close")
+            enrolPhase = EnrolPhase.TEST  // the close button just closes
+            return
+        }
+        vp.save(repository.context, owner, r.threshold)
+        _enrolPrompt.value = null
+        _aiResponse.value = "🔐 Voice lock is on. Your samples matched at %.2f or better; PAA needs %.2f".format(r.ownerMin, r.threshold) +
+            (r.impostorMax?.let { ", the other voice(s) scored at most %.2f.".format(it) } ?: ". No other voice was tested — use \"Test a voice\" with someone.") +
+            " Payments still always need your fingerprint."
+        otherPrints.clear()
+        restartWakeListener()
+    }
+
+    private fun testResult(print: FloatArray) {
+        val vp = com.paa.assistant.core.audio.VoicePrint
+        val owner = vp.load(repository.context)
+        if (owner == null) { status("Enrol your voice first."); return }
+        val score = vp.similarity(print, owner)
+        val needed = vp.threshold(repository.context)
+        status(
+            if (score >= needed) "✅ Accepted as you — match %.2f (needs %.2f).".format(score, needed)
+            else "⛔ Rejected — match %.2f (needs %.2f).".format(score, needed)
+        )
     }
 
     private fun restartWakeListener() {

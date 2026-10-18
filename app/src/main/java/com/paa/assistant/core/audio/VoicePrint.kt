@@ -24,8 +24,9 @@ object VoicePrint {
     private const val PREFS = "paa_voiceprint"
     private const val KEY_PRINT = "print"
     private const val KEY_ON = "lock_on"
+    private const val KEY_THRESHOLD = "threshold"
 
-    /** Similarity at or above this = the owner. Tune with the owner (see PAA_EXECUTION_PLAN.md V2). */
+    /** Default accept line before calibration; enrolment now stores the owner's own ([threshold]). */
     const val THRESHOLD = 0.55
 
     /** Fewer frames than this (≈0.6 s of speech) can't be judged reliably. */
@@ -59,11 +60,17 @@ object VoicePrint {
         return FloatArray(size) { this[it] / n }
     }
 
-    fun save(context: Context, print: FloatArray) {
+    /** Saves the owner's voiceprint and the accept line calibrated at enrolment ([VoiceCalibration]). */
+    fun save(context: Context, print: FloatArray, threshold: Double) {
         prefs(context).edit()
             .putString(KEY_PRINT, DatabaseEncryption.encrypt(print.joinToString(",")))
+            .putFloat(KEY_THRESHOLD, threshold.toFloat())
             .putBoolean(KEY_ON, true).apply()
     }
+
+    /** The owner's calibrated accept line (older enrolments: [THRESHOLD]). */
+    fun threshold(context: Context): Double =
+        prefs(context).getFloat(KEY_THRESHOLD, THRESHOLD.toFloat()).toDouble().coerceAtLeast(VoiceCalibration.FLOOR)
 
     fun load(context: Context): FloatArray? = prefs(context).getString(KEY_PRINT, null)?.let { enc ->
         runCatching { DatabaseEncryption.decrypt(enc).split(",").map { it.toFloat() }.toFloatArray() }.getOrNull()

@@ -269,15 +269,18 @@ class WakeListenerService : Service() {
     private suspend fun verifyOwner(model: org.vosk.Model, spk: org.vosk.SpeakerModel, owner: FloatArray, pcm: ShortArray) {
         val result = kotlinx.coroutines.withContext(Dispatchers.Default) { VoicePrint.of(model, spk, pcm) }
         val (print, frames) = result ?: (null to 0)
+        val score = print?.let { VoicePrint.similarity(it, owner) } ?: 0.0
+        val needed = VoicePrint.threshold(this)
         when {
             print == null || frames < VoicePrint.MIN_FRAMES ->
                 DetectionLog.add("system", "Oyee PA", "🔐 too little speech to check your voice — say \"Oyee PA\" and keep talking")
-            VoicePrint.similarity(print, owner) >= VoicePrint.THRESHOLD -> {
-                Log.i(TAG, "voice match %.2f".format(VoicePrint.similarity(print, owner)))
+            score >= needed -> {
+                // Scores only (no audio), so the accept line can be tuned from real use
+                DetectionLog.add("system", "Oyee PA", "🔐 your voice (match %.2f, needs %.2f)".format(score, needed))
                 verifiedWakeAt = System.currentTimeMillis()
                 onWake()
             }
-            else -> DetectionLog.add("system", "Oyee PA", "🔐 not your voice (match %.2f) — ignored".format(VoicePrint.similarity(print, owner)))
+            else -> DetectionLog.add("system", "Oyee PA", "🔐 not your voice (match %.2f, needs %.2f) — ignored".format(score, needed))
         }
     }
 
