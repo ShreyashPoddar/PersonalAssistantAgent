@@ -1,5 +1,5 @@
 # HANDOFF — PAA (Personal Assistant Agent): Android app + on-device model + DGX training lane
-Last updated 2026-10-18 ~00:10 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
+Last updated 2026-10-18 ~14:50 IST. Older history: `git log -p HANDOFF.md`. Repo: https://github.com/ShreyashPoddar/PersonalAssistantAgent (PUBLIC), branch `main`.
 
 ## 1. Goal (owner's words, condensed)
 Automate the owner's whole phone use with an intelligent assistant ("PAA") on their iQOO Z7 Pro (I2301, Android 15,
@@ -75,6 +75,11 @@ understand all expenses (Axis) and who owes whom; answer anything from the web. 
   came from the batched eval. GPU: PAA holds no card (queue empty), LocalAI has it.
 - **Next:** phone eval of 1B v3 4-bit (ask owner if phone is free; replaces v2-q4 if >12/15); v4 data = more
   "two tasks in one message" + hackathon-link-in-random-group; then P1 app work (`docs/build/STATUS.md`).
+- **v4 (2026-10-18, data-v4 17,218 kept; more two-task msgs; stricter eval = merged titles fail):** DGX 1B v4 11/12,
+  has_task .91, false 5.0%, missed 3.9%, when .69 (harder test set). **Phone: 1B v4 4-bit = 14/15** (only
+  done_reply_closes fails: "10 final na ??" is skipped by the app's "no task words" pre-filter), peak ~1.13 GB,
+  2-11 s/msg -> **installed**. Phone was at 192.168.1.4 this time (IP changes too). Card released to LocalAI (queue empty).
+  App: 1-6 o'clock without am/pm = PM (`LocalTaskParser`), installed.
 - The owner wants: keep cards we hold until the whole model is done; **tell the owner before releasing an idle held card**;
   decide routine things yourself and inform (don't ask).
 
