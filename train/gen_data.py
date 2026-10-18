@@ -35,7 +35,7 @@ CATEGORIES = [
     ("a hackathon / fest / workshop registration post, sometimes for the owner's batch, sometimes not", "received", 2),
     ("an internship or job post that names eligible batches (sometimes includes the owner's batch, sometimes not)", "received", 2),
     ("an internship / job / placement post that @mentions the owner by name but is ONLY for a different batch year than the owner's (not a task)", "received", 2),
-    ("someone in a random or unrelated group @mentions the owner with a hackathon / event registration link ('@name register for this'), not from the owner's team (not a task)", "received", 2),
+    ("someone in a random or unrelated group @mentions the owner with a hackathon / event registration link ('@name register for this'), not from the owner's team (not a task)", "received", 3),
     ("an advertisement, sale, cashback or promotional message", "received", 2),
     ("a bank / UPI / OTP / delivery / app notification style message", "received", 1),
     ("an announcement to the whole class or group with no personal action (holiday, room change, results out)", "received", 2),
@@ -54,7 +54,9 @@ CATEGORIES = [
     ("two unrelated tasks in one message (report bhejna + fees bharna)", "received sent", 3),
     ("the owner promises two different things in one message, often joined by 'and' / 'aur' / 'phir', each with its own time (I'll call you by 140 and send the ppt at 315)", "sent", 3),
     ("someone asks the owner for two or three separate things in one message (notes bhej de aur kal ka lab bhi le aana)", "received burst", 2),
-    ("a hackathon / event registration link with an @mention to the owner in a random, unrelated or large group (not a task)", "received", 2),
+    ("a hackathon / event registration link with an @mention to the owner in a random, unrelated or large group (not a task)", "received", 3),
+    ("someone @mentions the owner in a group asking them to confirm a plan, time or detail in a few words ('@name 10 final na ??', 'kal pakka?', 'venue confirm kar') (a task: confirm it with that person)", "received", 3),
+    ("the owner's short reply ('Hn bhai', 'haan', 'done', 'yes final') answering one of the owner's OPEN 'confirm …' to-dos, so it is finished", "sent", 3),
 ]
 LANGS = [("Hinglish (Roman-script Hindi mixed with English, as Indian students really text)", 6),
          ("English with Indian texting style", 3), ("Hindi in Devanagari script", 1),
@@ -96,6 +98,8 @@ Rules:
 - A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
 - Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
 - "haan kar dunga"/"ok will do" accepts the request above it; with nothing above it is NOT a task.
+- An @mention asking the owner to confirm something ("10 final na ??") is a task: "Confirm … with <name>". The owner's
+  short answer to it later ("Hn bhai", "haan final") marks that open task done.
 - Internship/job posts: only if open to the {year} batch or no batch named, even when they @mention the owner.
 - Hackathon/event registration links forwarded in a random or unrelated group are not tasks, even with an @mention;
   only the owner's own team/organisers asking them to register, or the owner saying they will register, is a task.
