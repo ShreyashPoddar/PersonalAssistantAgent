@@ -76,7 +76,9 @@ status_snapshot() {
 }
 
 stop_job() {
-  if running_ids | grep -qxF "$1"; then
+  # not `running_ids | grep -q`: grep -q exits at the match, running_ids then dies of SIGPIPE and pipefail made the
+  # test fail -> "no running job" for a job that was running (2026-10-17/18, chain-270m-v3/-v4 holds never stopped)
+  if [ -f "$ROOT/jobs/$1/run.sh" ] && ! grep -qs '^exit=' "$ROOT/jobs/$1/run.log"; then
     tmux kill-session -t "paa-$1" 2>/dev/null
     echo "exit=stopped" >> "$ROOT/jobs/$1/run.log"
     post "[PAA DGX] stopped \`$1\` (control.stop)."
