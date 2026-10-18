@@ -342,7 +342,8 @@ class VoiceOverlayViewModel @Inject constructor(
                 }
             }
             LocalIntent.SAVE_PLACE -> localExecutor.savePlace(result.locationName)
-            LocalIntent.SEND_MESSAGE -> prepareMessage(result.recipient ?: "", result.taskTitle ?: "")
+            LocalIntent.SEND_MESSAGE -> if (result.taskTitle == null) prepareBareMessage(result.recipient ?: "")
+                else prepareMessage(result.recipient ?: "", result.taskTitle)
             LocalIntent.UNKNOWN -> "I didn't quite catch that. Could you rephrase?"
         }
     }
@@ -469,10 +470,33 @@ class VoiceOverlayViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(errorMessage = "PAA needs Contacts permission to find $who — allow it, then ask again.")
             return "I need access to your contacts to find $who."
         }
-        val matches = com.paa.assistant.core.messaging.ContactResolver.find(ctx, who)
-        if (matches.isEmpty()) return "I couldn't find \"$who\" in your contacts."
+        var matches = com.paa.assistant.core.messaging.ContactResolver.find(ctx, who)
+        // Two words heard ("Riya ECE") but saved as just "Riya": try the first word.
+        if (matches.isEmpty() && who.contains(' ')) matches = com.paa.assistant.core.messaging.ContactResolver.find(ctx, who.substringBefore(' '))
+        if (matches.isEmpty()) {
+            Log.i(tag, "send: no contact match")
+            return "I couldn't find \"$who\" in your contacts."
+        }
+        Log.i(tag, "send: confirm popup shown (${matches.size} match(es))")
         _uiState.value = _uiState.value.copy(pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3)))
         return "Send to ${matches.first().name}?\n\"$text\"" + if (matches.size > 1) "\n(Other matches below.)" else ""
+    }
+
+    /** "message Riya Sharma test": the longest leading words (up to 3) that match a saved contact are the name. */
+    private fun prepareBareMessage(rest: String): String {
+        val ctx = repository.context
+        val words = rest.split(Regex("\\s+"))
+        if (com.paa.assistant.core.messaging.ContactResolver.hasPermission(ctx)) {
+            for (n in minOf(3, words.size - 1) downTo 1) {
+                val name = words.take(n).map { it.lowercase() }
+                val hit = com.paa.assistant.core.messaging.ContactResolver.find(ctx, name.joinToString(" ")).any { c ->
+                    val parts = c.name.lowercase().split(Regex("\\s+"))
+                    name.all { w -> parts.any { it.startsWith(w) } }
+                }
+                if (hit) return prepareMessage(words.take(n).joinToString(" "), words.drop(n).joinToString(" ").replaceFirstChar { it.uppercase() })
+            }
+        }
+        return prepareMessage(words.first(), words.drop(1).joinToString(" ").replaceFirstChar { it.uppercase() })
     }
 
     /** The owner tapped Send (or said "send"/"bhej do"). */

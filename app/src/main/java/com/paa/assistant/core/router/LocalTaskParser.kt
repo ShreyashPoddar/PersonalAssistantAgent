@@ -117,10 +117,19 @@ class LocalTaskParser @Inject constructor() {
         RegexOption.IGNORE_CASE
     )
 
+    // "message Riya test", "whatsapp Riya Sharma I'm late": no word between the name and the text. Where the name
+    // ends is decided against the saved contacts (VoiceOverlayViewModel), so the text is left null here.
+    private val sendBare = Regex(
+        "^(?:please |pls |can you |could you )?(?:send (?:a )?(?:message|msg|text|whatsapp) to|message|msg|whatsapp) (\\S+(?: \\S+)+)$",
+        RegexOption.IGNORE_CASE
+    )
+
     /** A message to send for the owner, or null. Uses the raw words: the text is sent as the owner said it. */
     fun parseSendMessage(raw: String): LocalParseResult? {
         val t = raw.trim().trimEnd('.', '!')
-        val m = sendHi.find(t) ?: sendEn.find(t) ?: return null
+        val m = sendHi.find(t) ?: sendEn.find(t) ?: return sendBare.find(t)
+            ?.takeIf { it.groupValues[1].substringBefore(' ').lowercase() !in setOf("me", "mujhe", "myself", "paa") }
+            ?.let { LocalParseResult(LocalIntent.SEND_MESSAGE, taskTitle = null, recipient = it.groupValues[1].trim(), confidence = 0.9f, rawInput = raw) }
         val who = m.groupValues[1].trim()
         val text = m.groupValues[2].trim()
         if (text.length < 2 || who.lowercase() in setOf("me", "mujhe", "myself", "paa")) return null

@@ -20,6 +20,16 @@ class SendMessageTest {
         assertEquals(LocalIntent.SEND_MESSAGE, parser.parse("tell Rohit that the wifi is paid").intent)
     }
 
+    @Test fun `message without a joining word leaves the split to the contacts`() {
+        parser.parseSendMessage("message Riya test")!!.let {
+            assertEquals("Riya test", it.recipient); assertNull(it.taskTitle)
+        }
+        parser.parseSendMessage("Message Riya Sharma I'm late.")!!.let { assertEquals("Riya Sharma I'm late", it.recipient) }
+        assertEquals("Aman", parser.parseSendMessage("message Aman that hi")!!.recipient)
+        assertNull(parser.parseSendMessage("message me at 5"))
+        assertNull(parser.parseSendMessage("message Riya"))
+    }
+
     @Test fun `not a message request`() {
         assertNull(parser.parseSendMessage("remind me to call mom at 5 pm"))
         assertNull(parser.parseSendMessage("tell me a joke"))
