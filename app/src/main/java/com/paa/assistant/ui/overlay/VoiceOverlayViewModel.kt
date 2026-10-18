@@ -44,7 +44,13 @@ data class VoiceUiState(
     val pendingSend: PendingSend? = null
 )
 
-data class PendingSend(val contact: com.paa.assistant.core.messaging.Contact, val text: String, val alternatives: List<com.paa.assistant.core.messaging.Contact> = emptyList())
+data class PendingSend(
+    val contact: com.paa.assistant.core.messaging.Contact, val text: String,
+    val alternatives: List<com.paa.assistant.core.messaging.Contact> = emptyList(),
+    /** Who asked: spoken (OWNER_VOICE) or typed (OWNER_UI), and whether the voice was the owner's. */
+    val source: com.paa.assistant.core.agent.CommandSource = com.paa.assistant.core.agent.CommandSource.OWNER_VOICE,
+    val voiceVerified: Boolean = false
+)
 
 /**
  * VoiceOverlayViewModel — the brain behind the voice assistant UI.
@@ -125,7 +131,7 @@ class VoiceOverlayViewModel @Inject constructor(
                 finalUserText = captured,
                 partialText = ""
             )
-            processCommand(captured)
+            processCommand(captured, spoken = true)
         } else {
             stopListening()
         }
@@ -174,7 +180,7 @@ class VoiceOverlayViewModel @Inject constructor(
                     finalUserText = event.text,
                     partialText = ""
                 )
-                processCommand(event.text)
+                processCommand(event.text, spoken = true)
             }
             is SpeechEvent.ListeningStopped -> { /* handled by Final event or debounce */ }
             is SpeechEvent.Error -> {
@@ -187,7 +193,7 @@ class VoiceOverlayViewModel @Inject constructor(
                         partialText = "",
                         errorMessage = ""
                     )
-                    processCommand(captured)
+                    processCommand(captured, spoken = true)
                     return
                 }
 
@@ -213,12 +219,21 @@ class VoiceOverlayViewModel @Inject constructor(
     }
 
     /** @param localOnly true for text derived from private chats: never escalate to the cloud. */
-    fun processCommand(input: String, localOnly: Boolean = false) {
+    /** How the current command came in (see [PendingSend.source]). */
+    private var commandSource = com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+    private var commandVoiceVerified = false
+
+    fun processCommand(input: String, localOnly: Boolean = false, spoken: Boolean = false) {
         if (_uiState.value.pendingSend != null) {
             val said = input.trim().lowercase()
             if (Regex("^(send|send it|yes|haan|ha|bhej do|bhejo|bhej de|ok send)\\b").containsMatchIn(said)) { confirmSend(); return }
             if (Regex("^(cancel|no|nahi|mat bhejo|don'?t)\\b").containsMatchIn(said)) { cancelSend(); return }
         }
+        commandSource = if (spoken) com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+            else com.paa.assistant.core.agent.CommandSource.OWNER_UI
+        // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
+        commandVoiceVerified = spoken &&
+            System.currentTimeMillis() - com.paa.assistant.services.WakeListenerService.verifiedWakeAt < 60_000L
         // Owner's screen-reading switch ("banking mode") — a local setting, not an Action
         com.paa.assistant.core.shield.A11yToggle.voiceCommand(input)?.let { on ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
@@ -320,7 +335,7 @@ class VoiceOverlayViewModel @Inject constructor(
                 result.timestamp?.let { ts ->
                     executor.submit(
                         com.paa.assistant.core.agent.Action.SetAlarm(ts, result.taskTitle ?: "Alarm"),
-                        com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+                        commandSource, voiceVerified = commandVoiceVerified
                     ).message
                 } ?: "I couldn't understand the time. Please try again."
             }
@@ -478,7 +493,9 @@ class VoiceOverlayViewModel @Inject constructor(
             return "I couldn't find \"$who\" in your contacts."
         }
         Log.i(tag, "send: confirm popup shown (${matches.size} match(es))")
-        _uiState.value = _uiState.value.copy(pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3)))
+        _uiState.value = _uiState.value.copy(
+            pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3), commandSource, commandVoiceVerified)
+        )
         return "Send to ${matches.first().name}?\n\"$text\"" + if (matches.size > 1) "\n(Other matches below.)" else ""
     }
 
@@ -508,7 +525,7 @@ class VoiceOverlayViewModel @Inject constructor(
         viewModelScope.launch {
             val result = executor.submit(
                 com.paa.assistant.core.agent.Action.SendMessage("WhatsApp", to.phoneE164, to.name, p.text),
-                com.paa.assistant.core.agent.CommandSource.OWNER_VOICE, preConfirmed = true
+                p.source, preConfirmed = true, voiceVerified = p.voiceVerified
             )
             deliverResponse(if (result.ok || result.message.startsWith("I've already")) result.message else "Not sent: ${result.message}")
         }

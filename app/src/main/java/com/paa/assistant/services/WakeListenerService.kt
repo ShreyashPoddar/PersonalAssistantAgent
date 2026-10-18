@@ -274,6 +274,7 @@ class WakeListenerService : Service() {
                 DetectionLog.add("system", "Oyee PA", "🔐 too little speech to check your voice — say \"Oyee PA\" and keep talking")
             VoicePrint.similarity(print, owner) >= VoicePrint.THRESHOLD -> {
                 Log.i(TAG, "voice match %.2f".format(VoicePrint.similarity(print, owner)))
+                verifiedWakeAt = System.currentTimeMillis()
                 onWake()
             }
             else -> DetectionLog.add("system", "Oyee PA", "🔐 not your voice (match %.2f) — ignored".format(VoicePrint.similarity(print, owner)))
@@ -469,6 +470,10 @@ class WakeListenerService : Service() {
     }
 
     companion object {
+        /** When "Oyee PA" last matched the owner's voiceprint. In-process only, so no other app can claim it. */
+        @Volatile var verifiedWakeAt = 0L
+            private set
+
         private const val TAG = "PAA_Wake"
         private const val CHANNEL = "paa_wake_listener"
         private const val CHANNEL_WAKE = "paa_wake_popup"

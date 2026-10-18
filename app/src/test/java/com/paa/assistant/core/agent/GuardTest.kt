@@ -23,7 +23,7 @@ class GuardTest {
     private data class Case(
         val name: String, val a: Action, val s: CommandSource, val expected: Verdict,
         val pre: Boolean = false, val lockdown: Boolean = false, val paused: Boolean = false,
-        val voiceLock: Boolean = true, val rule: ContactRuleEntity? = null, val trustAll: Boolean = false
+        val voiceLock: Boolean = true  /* = voice verified */, val rule: ContactRuleEntity? = null, val trustAll: Boolean = false
     )
 
     private val allow = Verdict.Allow
@@ -67,6 +67,13 @@ class GuardTest {
         Case("trust all: voice without voice lock still fingerprint", msg, OWNER_VOICE, finger, pre = true, voiceLock = false, trustAll = true),
         Case("trust all: ALWAYS_ASK still fingerprint", msg, OWNER_UI, finger, pre = true, rule = rule("ALWAYS_ASK", before = false), trustAll = true),
         Case("trust all: chat-triggered still denied", msg, SYSTEM_EVENT, Verdict.Deny("Messages only on the owner's command"), trustAll = true),
+        // Owner's verified voice ("Oyee PA" matched) instead of a fingerprint
+        Case("verified voice, first message, Send tapped", msg, OWNER_VOICE, allow, pre = true),
+        Case("verified voice, first message, not previewed", msg, OWNER_VOICE, tap),
+        Case("verified voice, ALWAYS_ASK still fingerprint", msg, OWNER_VOICE, finger, pre = true, rule = rule("ALWAYS_ASK")),
+        Case("unverified voice, first message", msg, OWNER_VOICE, finger, pre = true, voiceLock = false),
+        Case("typed, first message", msg, OWNER_UI, finger, pre = true),
+        Case("verified voice never covers payments", order, OWNER_VOICE, finger, pre = true),
         // 7. MONEY
         Case("order from UI", order, OWNER_UI, finger),
         Case("order pre-confirmed still fingerprint", order, OWNER_VOICE, finger, pre = true),

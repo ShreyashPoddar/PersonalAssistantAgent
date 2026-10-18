@@ -32,7 +32,7 @@ class ExecutorTest {
     private val logged = mutableListOf<Triple<String, String, String>>()
 
     private fun executor(verdict: Verdict, approve: Boolean = true, skill: Skill<Action>? = FakeSkill()) = Executor(
-        check = { _, _, _ -> verdict },
+        check = { _, _, _, _ -> verdict },
         ask = { _, _, _ -> approve },
         skillFor = { skill },
         audit = audit, rules = rules,

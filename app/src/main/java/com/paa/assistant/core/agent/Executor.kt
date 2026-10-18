@@ -11,7 +11,7 @@ import javax.inject.Singleton
 /** The ONLY entry point for doing things: Guard → confirm → skill → audit. Returns the result or why it didn't run. */
 @Singleton
 class Executor internal constructor(
-    private val check: suspend (Action, CommandSource, Boolean) -> Verdict,
+    private val check: suspend (Action, CommandSource, Boolean, Boolean) -> Verdict,
     private val ask: suspend (Action, CommandSource, Boolean) -> Boolean,
     private val skillFor: (Action) -> Skill<Action>?,
     private val audit: AuditDao,
@@ -22,8 +22,10 @@ class Executor internal constructor(
     @Inject constructor(guard: Guard, broker: ConfirmBroker, skills: SkillRegistry, audit: AuditDao, rules: ContactRuleDao) :
         this(guard::check, broker::ask, skills::forAction, audit, rules)
 
-    suspend fun submit(action: Action, source: CommandSource, preConfirmed: Boolean = false): ActionResult {
-        val verdict = check(action, source, preConfirmed)
+    suspend fun submit(
+        action: Action, source: CommandSource, preConfirmed: Boolean = false, voiceVerified: Boolean = false
+    ): ActionResult {
+        val verdict = check(action, source, preConfirmed, voiceVerified)
         val approved = when (verdict) {
             Verdict.Allow -> true
             is Verdict.Deny -> return record(action, source, verdict, ActionResult(false, verdict.reason))

@@ -99,7 +99,7 @@ fun ActivityCard(
                     Text("Trust all my contacts", color = textPrimary, fontSize = 12.sp)
                     Text(
                         "No fingerprint for the first message to someone — you only check the popup and tap Send. " +
-                            "Voice commands still need a fingerprint until \"Only my voice\" is on.",
+                            "Spoken commands need a fingerprint unless they start with \"Oyee PA\" and \"Only my voice\" is on.",
                         color = textSecondary, fontSize = 11.sp
                     )
                 }

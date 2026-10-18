@@ -15,9 +15,10 @@ sealed class Verdict {
 @Singleton
 class Guard @Inject constructor(private val settings: AgentSettings, private val rules: ContactRuleDao) {
 
-    suspend fun check(action: Action, source: CommandSource, preConfirmed: Boolean = false): Verdict =
+    /** [voiceVerified]: this spoken command followed an "Oyee PA" that matched the owner's voiceprint. */
+    suspend fun check(action: Action, source: CommandSource, preConfirmed: Boolean = false, voiceVerified: Boolean = false): Verdict =
         decide(
-            action, source, preConfirmed, settings.lockdown, settings.paused, settings.voiceLockOn(), ruleFor(action),
+            action, source, preConfirmed, settings.lockdown, settings.paused, voiceVerified, ruleFor(action),
             settings.trustAllContacts
         )
 
@@ -29,7 +30,7 @@ class Guard @Inject constructor(private val settings: AgentSettings, private val
         /** Pure policy — unit-tested. Rules are checked in this order. */
         fun decide(
             a: Action, s: CommandSource, preConfirmed: Boolean, lockdown: Boolean, paused: Boolean,
-            voiceLock: Boolean, rule: ContactRuleEntity?, trustAll: Boolean = false
+            voiceVerified: Boolean, rule: ContactRuleEntity?, trustAll: Boolean = false
         ): Verdict {
             if (a.tier == RiskTier.SOS) return if (s in OWNER) Verdict.Allow else Verdict.Deny("SOS only from the owner")
             if (paused) return Verdict.Deny("PAA is paused")
@@ -38,7 +39,7 @@ class Guard @Inject constructor(private val settings: AgentSettings, private val
             }
             return when (a.tier) {
                 RiskTier.READ, RiskTier.PRIVATE_REVERSIBLE -> Verdict.Allow
-                RiskTier.OUTWARD -> outward(a, s, preConfirmed, voiceLock, rule, trustAll)
+                RiskTier.OUTWARD -> outward(a, s, preConfirmed, voiceVerified, rule, trustAll)
                 RiskTier.MONEY ->
                     if (s in OWNER) Verdict.Confirm(biometric = true) else Verdict.Deny("Payments only on the owner's command")
                 RiskTier.SOS -> Verdict.Allow  // handled above
@@ -46,22 +47,23 @@ class Guard @Inject constructor(private val settings: AgentSettings, private val
         }
 
         private fun outward(
-            a: Action, s: CommandSource, preConfirmed: Boolean, voiceLock: Boolean, rule: ContactRuleEntity?, trustAll: Boolean
+            a: Action, s: CommandSource, preConfirmed: Boolean, voiceVerified: Boolean, rule: ContactRuleEntity?, trustAll: Boolean
         ): Verdict {
             if (s == CommandSource.SYSTEM_EVENT) {
                 // The existing "busy on a call" auto-reply.
                 return if (rule?.autoReplyDuringCall == true && a is Action.SendMessage) Verdict.Allow
                 else Verdict.Deny("Messages only on the owner's command")
             }
+            val ownerVoice = s == CommandSource.OWNER_VOICE && voiceVerified
             val v = when {
-                // First time to this contact, unless the owner chose to trust all contacts
-                !trustAll && (rule == null || !rule.messagedBefore) -> Verdict.Confirm(biometric = true)
                 rule?.outward == "ALWAYS_ASK" -> Verdict.Confirm(biometric = true)
+                // First time to this contact: fingerprint, unless the owner's verified voice asked or they trust all contacts
+                !trustAll && !ownerVoice && (rule == null || !rule.messagedBefore) -> Verdict.Confirm(biometric = true)
                 rule?.outward == "AUTO" -> Verdict.Allow
                 else -> if (preConfirmed) Verdict.Allow else Verdict.Confirm(biometric = false)  // PREVIEW
             }
-            // Anyone near the phone could have spoken.
-            if (s == CommandSource.OWNER_VOICE && !voiceLock && (v == Verdict.Allow || v == Verdict.Confirm(false))) {
+            // Spoken but not verified as the owner: anyone near the phone could have said it.
+            if (s == CommandSource.OWNER_VOICE && !voiceVerified && (v == Verdict.Allow || v == Verdict.Confirm(false))) {
                 return Verdict.Confirm(biometric = true)
             }
             return v
