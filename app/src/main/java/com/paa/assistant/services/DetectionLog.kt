@@ -44,9 +44,9 @@ object DetectionLog {
     }
 
     fun add(source: String, text: String, result: String) {
-        val snippet = text.replace(Regex("\\s+"), " ").trim().let { if (it.length > 60) it.take(57) + "…" else it }
+        val snippet = ChatTaskChecks.mask(text).replace(Regex("\\s+"), " ").trim().let { if (it.length > 60) it.take(57) + "…" else it }
         synchronized(this) {
-            _entries.value = (listOf(Entry(System.currentTimeMillis(), source, snippet, result)) + _entries.value).take(MAX)
+            _entries.value = (listOf(Entry(System.currentTimeMillis(), source, snippet, ChatTaskChecks.mask(result))) + _entries.value).take(MAX)
             save()
         }
     }
@@ -55,6 +55,15 @@ object DetectionLog {
     fun json(): String = JSONArray().also { arr ->
         _entries.value.forEach { e -> arr.put(JSONObject().put("t", e.time).put("s", e.source).put("m", e.snippet).put("r", e.result)) }
     }.toString()
+
+    /** Puts back entries from [json] (debug restore only). */
+    fun restore(json: String) {
+        val arr = JSONArray(json)
+        val restored = (0 until arr.length()).map { i ->
+            arr.getJSONObject(i).let { Entry(it.getLong("t"), it.getString("s"), it.getString("m"), it.getString("r")) }
+        }
+        synchronized(this) { _entries.value = (_entries.value + restored).sortedByDescending { it.time }.take(MAX); save() }
+    }
 
     fun clear() {
         synchronized(this) { _entries.value = emptyList(); save() }

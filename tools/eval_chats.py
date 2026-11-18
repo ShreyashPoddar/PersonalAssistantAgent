@@ -137,9 +137,12 @@ def main():
     if a.only:
         scenarios = [s for s in scenarios if s["id"] == a.only]
     run_id = dt.datetime.now().strftime("%H%M")
-    adb(a.serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
-        "--ez", "reset", "true")
-    time.sleep(3)
+    # Never wipe a real phone: scenario chats carry "E<run_id>" and are removed after the run instead.
+    # (reset only works on an emulator now; it wiped the owner's data before.)
+    if a.serial.startswith("emulator-"):
+        adb(a.serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
+            "--ez", "reset", "true")
+        time.sleep(3)
     rows = []
     for s in scenarios:
         t0 = time.time()

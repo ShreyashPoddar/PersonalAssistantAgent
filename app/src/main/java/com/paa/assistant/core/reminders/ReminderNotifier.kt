@@ -140,10 +140,9 @@ object ReminderNotifier {
     }
 
     /** Confirmation after a chat task was auto-scheduled, with Undo. */
-    fun showScheduled(context: Context, taskId: Long, title: String, due: Long, source: String, isDefaultDeadline: Boolean, reason: String? = null) {
+    fun showScheduled(context: Context, taskId: Long, title: String, due: Long?, source: String, reason: String? = null) {
         ensureChannels(context)
-        val whenText = SimpleDateFormat("h:mm a, MMM d", Locale.getDefault()).format(Date(due)) +
-            if (isDefaultDeadline) " (end of day)" else ""
+        val whenText = due?.let { SimpleDateFormat("h:mm a, MMM d", Locale.getDefault()).format(Date(it)) } ?: "whenever — no deadline was said"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_SCHEDULED)
             .setSmallIcon(android.R.drawable.ic_menu_agenda)

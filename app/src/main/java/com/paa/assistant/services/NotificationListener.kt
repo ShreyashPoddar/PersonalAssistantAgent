@@ -46,7 +46,7 @@ class NotificationListener : NotificationListenerService() {
     /** App-generated notification texts that aren't messages from a person. */
     private val systemText = Regex(
         "^(\\d+ (new )?messages?( from \\d+ chats)?|\\d+ missed (voice |video )?calls?|missed (voice |video )?call|" +
-            "(ongoing|incoming) (voice |video )?call|calling…?|ringing…?|checking for new messages|" +
+            "(ongoing|incoming) (voice |video )?call|calling…?|ringing…?|checking for new (messages|calls)|" +
             "whatsapp web is currently active|backup in progress.*|this message was deleted|" +
             "(📷|🎥|🎤|📄|🖼️|🎵)?\\s*(photo|video|voice message|audio|document|sticker|gif)( \\(\\d+:\\d+\\))?)$",
         RegexOption.IGNORE_CASE

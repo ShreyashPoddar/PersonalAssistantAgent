@@ -39,22 +39,22 @@ data class ChatMessage(
 /**
  * The single pipeline every chat message goes through. Runs entirely on the phone.
  *
- *  1. Rules that don't need understanding: hackathon links/registration only from personal chats
- *     or [UserProfile.hackathonGroups]; other groups only when the user is named; internship posts
- *     for other batches are dropped.
- *  2. The on-device model reads the message as a sentence, with the conversation so far and the
- *     user's own past verdicts as examples, and returns each real task with a confidence and reason.
- *  3. Confident (≥ [AUTO_SCHEDULE]) → scheduled. Unsure (≥ [ASK_USER]) → "Is this a task?" with ✓/✗.
- *     Otherwise ignored. Every ✓, ✗ and Undo is remembered and teaches the model.
- *  4. Without the model, incoming messages are skipped (keyword guessing caused junk tasks); the
- *     user's own sent commitments still use the rule-based extractor, which is reliable for them.
+ *  1. Who is talking ([SenderKinds]): business accounts, bots and app notices never create tasks.
+ *  2. Rules that don't need understanding: internship posts for other batches are dropped; hackathon
+ *     links only from personal chats or [UserProfile.hackathonGroups]; other groups only when the owner is
+ *     named, or a follow-up comes from someone who named them, or an open task came from that group.
+ *  3. The on-device model reads the new lines with the chat so far. Lines that gave nothing are carried
+ *     into the chat's next burst for 30 min, so a request sent in pieces is read together.
+ *  4. [ChatTaskChecks] on every proposed task: advice isn't a task, details must be in the chat, titles
+ *     never name the owner. Confident (≥ [AUTO_SCHEDULE]) → scheduled; unsure (≥ [ASK_USER]) → asked.
+ *  5. Without a working model nothing is guessed (rule fallbacks made junk tasks): the chat is retried
+ *     once 2 min later. See docs/build/TASK_PIPELINE_V2.md.
  */
 @Singleton
 class ChatMessageProcessor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val localLlm: LocalLlm,
     private val parser: LocalTaskParser,
-    private val extractor: CommitmentExtractor,
     private val linkResolver: HackathonLinkResolver,
     private val scheduler: ChatTaskScheduler,
     private val feedbackDao: FeedbackDao,
@@ -66,6 +66,11 @@ class ChatMessageProcessor @Inject constructor(
     private val bursts = HashMap<String, MutableList<ChatMessage>>()
     private val burstJobs = HashMap<String, kotlinx.coroutines.Job>()
     private val burstScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    // A request often arrives in pieces minutes apart ("UPI nahi ho raha" … QR … "jaldi kar, expire ho jayega"). Lines
+    // that gave nothing are carried into the chat's next burst for 30 min, so the pieces are read together.
+    private val carry = HashMap<String, MutableList<Pair<Long, String>>>()
+    // Group: who mentioned the owner, and when — their follow-ups count as addressed to the owner for 30 min
+    private val mentionedBy = HashMap<String, HashMap<String, Long>>()
     companion object {
         const val AUTO_SCHEDULE = 0.75f
         /** Details that appear only in LocalLlm's few-shot examples. */
@@ -74,6 +79,8 @@ class ChatMessageProcessor @Inject constructor(
         private const val HISTORY_PER_CHAT = 12
         /** Quiet time after the last message of a burst before it's read. */
         private const val BURST_MS = 20_000L
+        private const val CARRY_MS = 30 * 60_000L
+        private const val CARRY_LINES = 8
         private val DAY_WORDS = Regex("\\b(kal|aaj|parso|parson|tomorrow|today|tonight|raat|subah|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|somvar|mangal|budh|guru|shukra|shani|ravi|next week|\\d{1,2}(st|nd|rd|th)|date)\\b")
         /** Same day said in Hinglish or English. */
         private val DAY_GROUPS = listOf(
@@ -84,6 +91,7 @@ class ChatMessageProcessor @Inject constructor(
                 "( (bhai|bro|yaar|ji|sir|done|confirm))*[.!👍 ]*$",
             RegexOption.IGNORE_CASE
         )
+        private val REACTION = Regex("^Reacted .+ to [\"“].*", RegexOption.DOT_MATCHES_ALL)
         private val TIME_WORDS = setOf("before", "by", "till", "until", "tomorrow", "today", "tonight", "pm", "am", "kal", "aaj", "baje", "tak", "pehle", "deadline")
     }
 
@@ -118,6 +126,14 @@ class ChatMessageProcessor @Inject constructor(
     suspend fun process(msg: ChatMessage, dryRun: MutableList<Prepared>? = null): Int {
         // Calls and dry runs are already whole; chat messages wait for the rest of their burst
         if (dryRun != null || msg.app == ChatApp.CALL) return processNow(msg, dryRun)
+        // Business accounts, bots and app texts never create tasks (most false tasks in real use came from them)
+        val kind = SenderKinds.of(context, msg)
+        if (kind == SenderKind.BUSINESS || kind == SenderKind.SYSTEM) {
+            DetectionLog.add("← " + (msg.chatName ?: msg.app.name.lowercase(Locale.ROOT)), msg.text,
+                "skipped: ${if (kind == SenderKind.SYSTEM) "app notice" else "business / bot account — not a saved contact"}")
+            return 0
+        }
+        if (REACTION.matches(msg.text.trim())) return 0  // "Reacted 👍 to …"
         remember(msg, pending = true)  // saved right away, so nothing is lost if the app restarts mid-burst
         val key = chatKey(msg)
         synchronized(bursts) {
@@ -126,12 +142,37 @@ class ChatMessageProcessor @Inject constructor(
             burstJobs[key] = burstScope.launch {
                 kotlinx.coroutines.delay(BURST_MS)
                 val batch = synchronized(bursts) { burstJobs.remove(key); bursts.remove(key) } ?: return@launch
-                processNow(merge(batch), null, remembered = true)
+                val lines = batch.map { "${who(it)}: ${it.text.trim()}" }
+                val carried = takeCarry(key)
+                val merged = if (carried.isEmpty()) merge(batch)
+                    else merge(batch).copy(text = (carried + lines).joinToString("\n"), burst = true)
+                var reachedModel = false
+                val found = processNow(merged, null, remembered = true, onModel = { reachedModel = true })
+                if (found == 0 && reachedModel) keepCarry(key, carried + lines) else clearCarry(key)
                 runCatching { historyDao.markRead(key) }
             }
         }
         return 0
     }
+
+    private fun takeCarry(key: String): List<String> = synchronized(carry) {
+        val now = System.currentTimeMillis()
+        carry[key]?.removeAll { now - it.first > CARRY_MS }
+        carry[key].orEmpty().map { it.second }
+    }
+
+    private fun keepCarry(key: String, lines: List<String>) = synchronized(carry) {
+        val now = System.currentTimeMillis()
+        val old = carry[key].orEmpty().associate { it.second to it.first }
+        carry[key] = lines.distinct().takeLast(CARRY_LINES).map { (old[it] ?: now) to it }.toMutableList()
+    }
+
+    private fun clearCarry(key: String) = synchronized(carry) { carry.remove(key) }
+
+    /** Senders of "Name: text" lines (or the message's own sender). */
+    private fun senders(msg: ChatMessage): List<String> =
+        if (msg.burst) msg.text.lines().mapNotNull { l -> l.substringBefore(": ", "").takeIf { it.isNotBlank() && it != "You" } }
+        else listOfNotNull(msg.sender)
 
     /**
      * The model sometimes lists one piece of work twice ("Send DBMS assignment before 5 PM" and
@@ -207,7 +248,10 @@ class ChatMessageProcessor @Inject constructor(
 
     private fun who(m: ChatMessage) = if (m.outgoing) "You" else (m.sender ?: m.chatName ?: "Them")
 
-    private suspend fun processNow(msg: ChatMessage, dryRun: MutableList<Prepared>?, remembered: Boolean = false): Int {
+    private suspend fun processNow(
+        msg: ChatMessage, dryRun: MutableList<Prepared>?, remembered: Boolean = false,
+        onModel: (() -> Unit)? = null, attempt: Int = 0
+    ): Int {
         var found = 0
         val text = msg.text.trim()
         // Open tasks from this chat: even a short "hn bhai" / "done" can finish one of them
@@ -231,8 +275,10 @@ class ChatMessageProcessor @Inject constructor(
         val conversation = (chatHistory(msg).filterNot { it in ownLines } + msg.recentMessages).distinct().takeLast(HISTORY_PER_CHAT)
         if (!remembered) remember(msg)
 
-        // Hackathon links: only where hackathons are really discussed
-        if (allowHackathon) {
+        if (isInternshipForOtherBatch(text)) { log("skipped: internship for another batch"); return found }
+
+        // Hackathon links: only where hackathons are really discussed (never from job-post chats)
+        if (allowHackathon && !internshipWords.containsMatchIn(text)) {
             for (url in linkResolver.extractUrls(text).take(3)) {
                 val hackathon = linkResolver.resolve(url) ?: continue
                 val created = scheduler.schedule(
@@ -250,19 +296,24 @@ class ChatMessageProcessor @Inject constructor(
             }
         }
 
-        if (isInternshipForOtherBatch(text)) { log("skipped: internship for another batch"); return found }
         val mentioned = UserProfile.isMentioned(text)
+        val key = chatKey(msg)
+        val now = System.currentTimeMillis()
+        // Follow-ups from someone who mentioned the owner in the last 30 min are addressed to the owner too
+        val followUp = msg.isGroup && synchronized(mentionedBy) {
+            if (mentioned) senders(msg).forEach { mentionedBy.getOrPut(key) { HashMap() }[it] = now }
+            senders(msg).any { s -> mentionedBy[key]?.get(s)?.let { now - it < CARRY_MS } == true }
+        }
         // (finishing an open group task is judged from the owner's own replies, not everyone's chatter)
-        if (msg.isGroup && !msg.outgoing && !mentioned && !UserProfile.isHackathonGroup(msg.chatName)) {
+        if (msg.isGroup && !msg.outgoing && !mentioned && !followUp && chatTasks.isEmpty() && !UserProfile.isHackathonGroup(msg.chatName)) {
             log("skipped: group message not addressed to you"); return found
         }
 
-        // The model takes ~1 min on this phone: pure chatter ("haha", "kya scene") doesn't need it
-        if (msg.app != ChatApp.CALL && !com.paa.assistant.core.router.TaskSignal.hasSignal(text, chatTasks.isNotEmpty())) {
-            log("skipped: no task words"); return found
-        }
+        // No keyword pre-filter: it dropped short follow-ups ("kar de", "expire ho jayega") that complete a request
+        onModel?.invoke()
         if (localLlm.isAvailable()) log("🧠 asking local AI…")
-        val learned = learnedExamples()
+        // The owner's past ✓/✗ are NOT shown to the model: a 1B model copied their titles into unrelated chats
+        val learned = emptyList<Pair<String, String?>>()
         val verdict = localLlm.extractTasks(
             text,
             LocalLlm.ChatContext(
@@ -324,27 +375,24 @@ class ChatMessageProcessor @Inject constructor(
                 val wp = groundedWhen(it.whenPhrase, said, text)
                 Candidate(it.title, wp?.let(parser::resolveWhen), it.priority, it.isRegistration, it.confidence, it.reason, "AI", wp)
             }
-        } else if (msg.app == ChatApp.CALL) {
-            // No model: a call transcript mixes both speakers — read promises and requests
-            (extractor.extract(text, outgoing = true, mentionedMe = false) +
-                extractor.extract(text, outgoing = false, mentionedMe = true))
-                .distinctBy { it.title.lowercase(Locale.ROOT) }
-                .map { Candidate(it.title, it.timestamp, it.priority, it.isRegistration, 0.8f, "Said on your call.", "rules") }
-                .ifEmpty { log("no task (rules)"); return found }
-        } else if (msg.outgoing) {
-            // No model: the user's own commitments ("I'll…", "karunga") are reliable to read with rules
-            extractor.extract(text, outgoing = true, mentionedMe = false).map {
-                Candidate(it.title, it.timestamp, it.priority, it.isRegistration, 0.8f, "You wrote that you'll do this.", "rules")
-            }.ifEmpty { log("no task (rules)"); return found }
         } else {
-            log(
-                if (localLlm.isAvailable()) "❌ local AI failed: ${localLlm.lastError ?: "unknown error"} — try 🔬 Test local AI"
-                else "skipped: install the local AI to understand incoming messages"
-            ); return found
+            // No rule fallback: it turned the owner's own questions into "promises". Retry once a little later.
+            if (!localLlm.isAvailable()) { log("skipped: install the local AI to understand messages"); return found }
+            if (dryRun == null && attempt == 0) {
+                log("❌ local AI failed: ${localLlm.lastError ?: "unknown error"} — retrying in 2 min")
+                burstScope.launch { kotlinx.coroutines.delay(120_000L); processNow(msg, null, remembered = true, attempt = 1) }
+            } else log("❌ local AI failed again: ${localLlm.lastError ?: "unknown error"} — try 🔬 Test local AI")
+            return found
         }
 
-        val groupRequest = msg.isGroup && !msg.outgoing && mentioned
-        for (c in candidates) {
+        val saidAll = (listOf(text, msg.chatName.orEmpty(), msg.sender.orEmpty()) + conversation).joinToString("\n")
+        val requester = if (msg.outgoing) msg.chatName else (msg.sender ?: msg.chatName)
+        for (raw in candidates) {
+            if (ChatTaskChecks.isAdvice(text, raw.title)) { log("ignored \"${raw.title}\": advice or a wish, not a task"); continue }
+            if (!ChatTaskChecks.grounded(raw.title, saidAll)) { log("ignored \"${raw.title}\": has details that aren't in this chat"); continue }
+            // "Send ppt to <owner>" is reversed: fix "to <owner>" → "to <requester>", else only ask
+            val fixedTitle = ChatTaskChecks.fixOwnerName(raw.title, UserProfile.names, requester)
+            val c = if (fixedTitle != null) raw.copy(title = fixedTitle) else raw.copy(confidence = minOf(raw.confidence, 0.6f))
             if ((c.isRegistration || registrationTalk.containsMatchIn(c.title)) && !allowHackathon) {
                 log("skipped \"${c.title}\": hackathon talk outside allowed chats"); continue
             }
@@ -374,7 +422,6 @@ class ChatMessageProcessor @Inject constructor(
                         priority = c.priority,
                         tag = categorize(c.title),
                         source = source,
-                        defaultDueMinutes = if (groupRequest) UserProfile.GROUP_REQUEST_DEFAULT_MINUTES else null,
                         reason = c.reason,
                         sourceMessage = text
                     )
@@ -382,7 +429,7 @@ class ChatMessageProcessor @Inject constructor(
                     val dueText = c.timestamp?.let {
                         " · due " + java.text.SimpleDateFormat("EEE d MMM h:mm a", Locale.ENGLISH).format(java.util.Date(it)) +
                             (c.whenPhrase?.let { w -> " (from \"$w\")" } ?: "")
-                    } ?: " · no deadline said"
+                    } ?: " · no deadline (none was said)"
                     log((if (created) "📌 $title" else "already scheduled: $title") + dueText + " (${c.engine}) — ${c.reason ?: ""}")
                 }
                 c.confidence >= ASK_USER -> {
@@ -394,7 +441,7 @@ class ChatMessageProcessor @Inject constructor(
                             priority = c.priority,
                             tag = categorize(c.title),
                             source = source,
-                            defaultDueMinutes = if (groupRequest) UserProfile.GROUP_REQUEST_DEFAULT_MINUTES else null,
+                            defaultDueMinutes = null,
                             reason = c.reason,
                             message = text
                         )

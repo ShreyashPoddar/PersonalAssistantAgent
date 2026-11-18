@@ -87,7 +87,7 @@ class ChatTaskScheduler @Inject constructor(
 
     /**
      * @param source shown to the user, e.g. "Rahul" or "typed message".
-     * @param defaultDueMinutes deadline when none was given, as minutes from now; null = end of today.
+     * @param defaultDueMinutes ignored: a task without a said deadline has none (invented ones caused useless alarms).
      * @param earlyMinutes heads-up lead time; null = default for the deadline type.
      */
     suspend fun schedule(
@@ -147,32 +147,23 @@ class ChatTaskScheduler @Inject constructor(
         sourceMessage: String?
     ) {
 
-        val isDefaultDeadline = timestamp == null || timestamp <= now
-        val isEod = isDefaultDeadline && defaultDueMinutes == null
-        val due = when {
-            !isDefaultDeadline -> timestamp!!
-            defaultDueMinutes != null -> now + defaultDueMinutes * 60_000L
-            else -> ReminderScheduler.endOfToday()
-        }
-        val early = earlyMinutes ?: when {
-            isEod -> ReminderScheduler.EOD_EARLY_MINUTES
-            isDefaultDeadline -> 15  // short default deadline (e.g. group request in 1 hour)
-            else -> CHAT_EARLY_MINUTES
-        }
+        // No deadline said → no deadline and no alarm; it shows in the list and the morning/evening summaries
+        val due = timestamp?.takeIf { it > now }
+        val early = earlyMinutes ?: CHAT_EARLY_MINUTES
 
         val id = repository.createTask(
             TaskEntity(
-                title = title,
+                title = ChatTaskChecks.mask(title),
                 dueTimestamp = due,
                 priority = priority,
-                tags = if (isDefaultDeadline) "$tag,$AUTO_DUE" else tag,
+                tags = tag,
                 // Prefix marks the task as chat-derived → never sent to Gemini (see PrivacyGuard)
                 sourceApp = "${PrivacyGuard.CHAT_SOURCE_PREFIX} ($source)",
                 reminderMinutesBefore = early,
-                sourceMessage = sourceMessage,
+                sourceMessage = sourceMessage?.let(ChatTaskChecks::mask),
                 aiReason = reason
             )
         )
-        ReminderNotifier.showScheduled(context, id, title, due, source, isEod, reason)
+        ReminderNotifier.showScheduled(context, id, ChatTaskChecks.mask(title), due, source, reason)
     }
 }

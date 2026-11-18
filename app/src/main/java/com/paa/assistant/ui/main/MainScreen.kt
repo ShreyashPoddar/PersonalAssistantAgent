@@ -423,7 +423,6 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                         OutlinedTextField(groups, { groups = it }, label = { Text("Groups where hackathon talk is for me") })
                                         OutlinedTextField(start, { start = it }, label = { Text("Alarms may ring from (hour, 0–23)") }, singleLine = true)
                                         OutlinedTextField(end, { end = it }, label = { Text("…until (hour, 1–24)") }, singleLine = true)
-                                        OutlinedTextField(groupMin, { groupMin = it }, label = { Text("Group request without a time: due in (minutes)") }, singleLine = true)
                                         OutlinedTextField(autoReply, { autoReply = it }, label = { Text("Auto-reply \"on a call\" to (chat names, comma-separated; empty = off)") })
                                     }
                                 },
