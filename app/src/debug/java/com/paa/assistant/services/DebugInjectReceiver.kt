@@ -34,6 +34,22 @@ class DebugInjectReceiver : BroadcastReceiver() {
             }
             return
         }
+        // --es delete_ids "1,2,3": delete exactly these tasks (owner-approved cleanup) and their alarms
+        intent.getStringExtra("delete_ids")?.let { csv ->
+            val ids = csv.split(",").mapNotNull { it.trim().toLongOrNull() }
+            val pending = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val db = com.paa.assistant.data.db.AppDatabase.getInstance(context).openHelper.writableDatabase
+                    ids.forEach { id ->
+                        com.paa.assistant.core.reminders.ReminderScheduler.cancel(context, id)
+                        db.execSQL("DELETE FROM tasks WHERE id = ?", arrayOf<Any>(id))
+                    }
+                    android.util.Log.i("PAA_Debug", "deleted tasks ${ids.joinToString(",")}")
+                } finally { pending.finish() }
+            }
+            return
+        }
         // --es delete_source_like X: delete tasks whose source contains X (leftover test scenarios) and their alarms
         intent.getStringExtra("delete_source_like")?.takeIf { it.length >= 4 }?.let { like ->
             val pending = goAsync()
