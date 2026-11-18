@@ -36,8 +36,10 @@ CATEGORIES = [
     ("an internship or job post that names eligible batches (sometimes includes the owner's batch, sometimes not)", "received", 2),
     ("an internship / job / placement post that @mentions the owner by name but is ONLY for a different batch year than the owner's (not a task)", "received", 2),
     ("someone in a random or unrelated group @mentions the owner with a hackathon / event registration link ('@name register for this'), not from the owner's team (not a task)", "received", 3),
-    ("an advertisement, sale, cashback or promotional message", "received", 2),
-    ("a bank / UPI / OTP / delivery / app notification style message", "received", 1),
+    ("an advertisement, sale, cashback or promotional message", "received", 3),
+    ("a bank / UPI / OTP / delivery / app notification style message", "received", 3),
+    ("a company / travel / shopping / delivery account asks the owner to confirm a booking, rate a trip, give feedback, "
+     "view a receipt, renew a contract or be available for a delivery (not a task: chat_name is the company)", "received", 4),
     ("an announcement to the whole class or group with no personal action (holiday, room change, results out)", "received", 2),
     ("casual chat, jokes, memes, or a vague suggestion without commitment (call pe baat karte hai, kabhi milte hai)", "received sent burst", 3),
     ("a reply showing one of the owner's OPEN tasks is now finished (ho gaya, bhej diya, done bro, mil gaya thanks)", "received sent burst", 2),
@@ -57,10 +59,27 @@ CATEGORIES = [
     ("a hackathon / event registration link with an @mention to the owner in a random, unrelated or large group (not a task)", "received", 3),
     ("someone @mentions the owner in a group asking them to confirm a plan, time or detail in a few words ('@name 10 final na ??', 'kal pakka?', 'venue confirm kar') (a task: confirm it with that person)", "received", 3),
     ("the owner's short reply ('Hn bhai', 'haan', 'done', 'yes final') answering one of the owner's OPEN 'confirm …' to-dos, so it is finished", "sent", 3),
+    # v6: categories from a month of real-use faults (docs/build/TASK_PIPELINE_V2.md)
+    ("a parent, sibling or friend gives advice, care or wishes, often in Hindi (so jao, health ka dhyan rakho, khana kha "
+     "lena, padh lo, tension mat lo, all the best, take care) - not a task", "received burst", 4),
+    ("a request that uses the owner's own name or nickname in the message ('<owner> bhai notes bhej de', '@<owner> apni "
+     "ppt bhejo', '<owner> tu kal form bhar dena'): a task for the owner, titled with the person who asked, never the "
+     "owner's name", "received burst", 4),
+    ("money in a flat / trip group: someone tells the owner to pay or add a split (a task) OR asks others to pay the owner "
+     "back (not the owner's task)", "received burst", 3),
+    ("a request that arrives in pieces: first only the need or problem ('UPI se payment nahi ho raha', 'form ka link aaya "
+     "hai'), then the ask or the push ('tu kar de please', 'jaldi kar expire ho jayega') - one task", "burst", 4),
+    ("the owner thinks aloud or asks a question about their own work ('case study aaj submit karu ya kal?', 'kya karna "
+     "hai isme') - not a task", "sent burst", 2),
+    ("someone sends a file, photo, link or receipt, or says they already sent something, with no ask - not a task", "received burst", 2),
+    ("a question to the owner that only asks for information or opinion ('kahan busy ho?', 'pehle kuch karna padta hai "
+     "kya?', 'game ke liye aa raha?') - not a task", "received burst", 3),
 ]
 LANGS = [("Hinglish (Roman-script Hindi mixed with English, as Indian students really text)", 6),
-         ("English with Indian texting style", 3), ("Hindi in Devanagari script", 1),
-         ("very casual Hinglish with typos, no punctuation, short forms (kl, h, nhi, pls, bhai)", 3)]
+         ("English with Indian texting style", 3), ("Hindi in Devanagari script", 3),
+         ("Hindi in Roman script with almost no English words, the way parents and relatives text (beta, kar lena, "
+          "bhej dena, aa jana)", 4),
+         ("very casual Hinglish with typos, no punctuation, short forms (kl, h, nhi, pls, bhai, krde, bhejde)", 4)]
 TIME_STYLES = ["compact clock times like 140, 315, 1145 meaning 1:40, 3:15, 11:45", "kal / parso / aaj raat",
                "a weekday (monday ko, by friday)", "'X baje tak' / 'X baje se pehle'", "a date (15 oct, 20th)",
                "by EOD / tonight / in 2 hours", "no time at all"]
@@ -97,13 +116,20 @@ like a person would and list the real to-dos THE OWNER must do. Reply with ONLY 
 Rules:
 - A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
 - Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
+- Not a task: advice, care or wishes ("so jao", "health ka dhyan rakho", "khana kha lena", "all the best"); questions that
+  only ask for information; files or receipts someone sent; anything from a company, shop, bank, travel or delivery
+  account (bookings, ratings, feedback, OTPs, receipts, offers).
+- The owner's name or nickname inside a message means it is addressed to the owner. Never put the owner's name in a
+  title: name the person who asked ("Send ppt to Riya", not "Send ppt to <owner's name>").
 - "haan kar dunga"/"ok will do" accepts the request above it; with nothing above it is NOT a task.
 - An @mention asking the owner to confirm something ("10 final na ??") is a task: "Confirm … with <name>". The owner's
   short answer to it later ("Hn bhai", "haan final") marks that open task done.
 - Internship/job posts: only if open to the {year} batch or no batch named, even when they @mention the owner.
 - Hackathon/event registration links forwarded in a random or unrelated group are not tasks, even with an @mention;
   only the owner's own team/organisers asking them to register, or the owner saying they will register, is a task.
-- Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there.
+- Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there —
+  except when the new lines complete or push a request from the earlier lines ("tu kar de", "jaldi kar", "expire ho
+  jayega"): then that request is a task.
 - title: 2-7 English words starting with a verb; name the person involved using ONLY names from the messages.
 - when: ALL time words for that task joined, even from different lines ("kal tak" + "5 baje se pehle" = "kal 5 baje se pehle"); else null. 140/315/1145 are clock times.
 - One task per piece of work: two actions joined by "and"/"aur"/"phir" are TWO tasks (each with its own time), never
