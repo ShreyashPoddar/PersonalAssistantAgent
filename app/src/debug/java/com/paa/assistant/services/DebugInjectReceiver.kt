@@ -29,6 +29,31 @@ class DebugInjectReceiver : BroadcastReceiver() {
             }
             return
         }
+        // --ez dumpall true: tasks (with source message + AI reason), saved chat lines and the detection log, as one
+        // plaintext JSON in the app's private files (pull with run-as, then delete) — for reviewing faults
+        if (intent.getBooleanExtra("dumpall", false)) {
+            val pending = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    DetectionLog.init(context)
+                    val db = com.paa.assistant.data.db.AppDatabase.getInstance(context).openHelper.readableDatabase
+                    fun rows(sql: String): org.json.JSONArray = org.json.JSONArray().also { arr ->
+                        db.query(sql).use { c ->
+                            while (c.moveToNext()) arr.put(org.json.JSONObject().also { o ->
+                                for (i in 0 until c.columnCount) o.put(c.getColumnName(i), if (c.isNull(i)) org.json.JSONObject.NULL else c.getString(i))
+                            })
+                        }
+                    }
+                    val since = System.currentTimeMillis() - 45L * 24 * 3600 * 1000
+                    val out = org.json.JSONObject()
+                        .put("tasks", rows("SELECT id,title,status,priority,dueTimestamp,tags,sourceApp,sourceMessage,aiReason,createdAt,updatedAt FROM tasks WHERE createdAt > $since ORDER BY createdAt"))
+                        .put("chat", rows("SELECT chatKey,line,createdAt,pending,isGroup FROM chat_history ORDER BY createdAt"))
+                        .put("log", org.json.JSONArray(DetectionLog.json()))
+                    java.io.File(context.filesDir, "dumpall_debug.json").writeText(out.toString())
+                } finally { pending.finish() }
+            }
+            return
+        }
         // --ez dumplog true: plaintext copy of the (encrypted) detection log for tools/eval_chats.py
         if (intent.getBooleanExtra("dumplog", false)) {
             DetectionLog.init(context)
