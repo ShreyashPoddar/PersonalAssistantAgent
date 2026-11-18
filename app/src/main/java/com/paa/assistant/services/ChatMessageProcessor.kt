@@ -388,6 +388,7 @@ class ChatMessageProcessor @Inject constructor(
         val saidAll = (listOf(text, msg.chatName.orEmpty(), msg.sender.orEmpty()) + conversation).joinToString("\n")
         val requester = if (msg.outgoing) msg.chatName else (msg.sender ?: msg.chatName)
         for (raw in candidates) {
+            if (ChatTaskChecks.isEmptyTitle(raw.title)) { log("ignored \"${raw.title}\": doesn't say what to do (yet)"); continue }
             if (ChatTaskChecks.isAdvice(text, raw.title)) { log("ignored \"${raw.title}\": advice or a wish, not a task"); continue }
             if (!ChatTaskChecks.grounded(raw.title, saidAll)) { log("ignored \"${raw.title}\": has details that aren't in this chat"); continue }
             // "Send ppt to <owner>" is reversed: fix "to <owner>" → "to <requester>", else only ask

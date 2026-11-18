@@ -23,6 +23,19 @@ object ChatTaskChecks {
 
     fun isAdvice(text: String, title: String): Boolean = ADVICE.containsMatchIn(text) && ADVICE_TITLE.containsMatchIn(title)
 
+    /** A title that names no work: "Do something", "Help Arpit", "Complete the task" ("ek kaam hai" before the ask). */
+    private val EMPTY_TITLE = Regex(
+        "^(do|complete|finish|handle|help( with)?|check|work on)( \\S+)?( (something|anything|it|this|that|the (work|task|thing)|a task|task|kaam|work))?( for \\S+)?$",
+        RegexOption.IGNORE_CASE
+    )
+    private val VAGUE = Regex("\\b(something|anything|it|this|that|work|task|thing|kaam)\\b", RegexOption.IGNORE_CASE)
+    private val BARE_HELP = Regex("^help( \\S+)?$", RegexOption.IGNORE_CASE)
+
+    fun isEmptyTitle(title: String): Boolean {
+        val t = title.trim().trimEnd('.', '!')
+        return EMPTY_TITLE.matches(t) && (VAGUE.containsMatchIn(t) || BARE_HELP.matches(t))
+    }
+
     /**
      * Titles must not name the owner: "Send ppt to Shreyash" for "Shreyash, ppt bhej do" is reversed.
      * "to/for <owner>" becomes "to <requester>" when the requester is known; any other owner name → null (unsure).

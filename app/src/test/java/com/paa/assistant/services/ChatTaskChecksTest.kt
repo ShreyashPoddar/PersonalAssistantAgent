@@ -19,6 +19,16 @@ class ChatTaskChecksTest {
         assertFalse(ChatTaskChecks.isAdvice("notes bhej dena", "Send notes"))
     }
 
+    @Test fun titlesThatNameNoWork() {
+        assertTrue(ChatTaskChecks.isEmptyTitle("Do something"))
+        assertTrue(ChatTaskChecks.isEmptyTitle("Help Arpit"))
+        assertTrue(ChatTaskChecks.isEmptyTitle("Complete the task"))
+        assertFalse(ChatTaskChecks.isEmptyTitle("Do daal split"))
+        assertFalse(ChatTaskChecks.isEmptyTitle("Do assignment"))
+        assertFalse(ChatTaskChecks.isEmptyTitle("Check festival ticket"))
+        assertFalse(ChatTaskChecks.isEmptyTitle("Send review PPT to Riya"))
+    }
+
     @Test fun ownerNameInTitleIsFixedOrFlagged() {
         assertEquals("Send VLSI project topic to Suryansh",
             ChatTaskChecks.fixOwnerName("Send VLSI project topic to Shreyash", owners, "Suryansh Pandey SRM"))
