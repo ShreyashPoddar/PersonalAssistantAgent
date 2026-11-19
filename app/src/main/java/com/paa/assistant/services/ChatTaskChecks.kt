@@ -74,9 +74,15 @@ object ChatTaskChecks {
     fun grounded(title: String, said: String): Boolean {
         val heard = Regex("[\\p{L}\\p{N}]+").findAll(said.lowercase(Locale.ROOT)).map { it.value }.toSet()
         val words = Regex("[\\p{L}\\p{N}]+").findAll(title).map { it.value }.toList()
+        // "Buy Vegetables" for "sabzi le aana": in Title Case titles a capital is style, not a name — check only
+        // codes/brands (SoHo, OMR, FM1) and numbers there
+        val long = words.drop(1).filter { it.length >= 3 && it[0].isLetter() }
+        val titleCase = long.isNotEmpty() && long.count { it[0].isUpperCase() } * 10 >= long.size * 6
         return words.drop(1).all { w ->
             val lw = w.lowercase(Locale.ROOT)
-            val needsCheck = w.any(Char::isDigit) || (w[0].isUpperCase() && lw !in COMMON && w.length >= 3)
+            val code = w.count(Char::isUpperCase) >= 2
+            val needsCheck = w.any(Char::isDigit) ||
+                (w[0].isUpperCase() && lw !in COMMON && w.length >= 3 && (!titleCase || code))
             !needsCheck || lw in heard || (lw.length >= 5 && heard.any { close(it, lw) }) ||
                 (w.all(Char::isDigit) && said.filter(Char::isDigit).contains(w))
         }

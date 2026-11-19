@@ -48,6 +48,10 @@ class ChatTaskChecksTest {
         // One-letter typo of a name in the chat is fine
         assertTrue(ChatTaskChecks.grounded("Call Bhomi at 3", "Bhoomi Shukla ECE: 3 bje call kar dena"))
         assertTrue(ChatTaskChecks.grounded("Submit lab record by Monday", "lab record monday tak submit karna"))
+        // English titles for Hindi messages are fine; copied brand names still aren't
+        assertTrue(ChatTaskChecks.grounded("Buy Vegetables For Dinner", "Mummy: kal sabzi le aana raat ke khane ke liye"))
+        assertFalse(ChatTaskChecks.grounded("Confirm SoHo Inn Booking", "Karthik: haa asap"))
+        assertFalse(ChatTaskChecks.grounded("Buy vegetables from Ramesh", "kal sabzi le aana"))
     }
 
     @Test fun codesAreMasked() {
