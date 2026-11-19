@@ -11,6 +11,30 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - Read first: `docs/PAA_SYSTEM_PLAN.md` (master plan) → `docs/build/README.md` → `docs/build/STATUS.md` → `P0`…`P5`;
   `docs/MODEL_PLAN.md`; `docs/build/PARALLELISM.md`.
 
+## Latest (2026-11-19, read first)
+- Real-use review (18 Oct–18 Nov): 56 real tasks = 22 right, 12 wrong title, 22 junk; misses = requests in pieces.
+  Design: `docs/build/TASK_PIPELINE_V2.md`. Step 1 shipped + on phone (`493c60b`, `ef787d7`): SenderKinds (business
+  skip), ChatTaskChecks (advice/empty/grounding/owner-name/OTP mask), 30-min carry-over, group follow-ups, no rule
+  fallback (retry), no invented deadlines. Live phone check passed 7/7 after the empty-title fix.
+- **Incident:** a test script sent debug `reset` to the real phone → wiped tasks/history/feedback. Tasks+history+log
+  restored from dump (verified exact); ✓/✗ feedback lost. `reset` now refused on non-emulators; eval_chats cleans only
+  its own `E<run>` chats. Memory: never wipe the real phone.
+- Owner approved + I deleted 21 junk tasks (backup `PAA-private/before-cleanup.json`). Phone: 28 pending, 7 done.
+- Private real test set: `C:/Users/shrey/Desktop/PAA-private/realset-v1.jsonl` (57 cases, laptop only, never DGX/git),
+  builder `build_realset.py`, scorer `train/eval_real.py`, runner `PAA-private/run_eval_real.sh` (WSL root, CPU —
+  LocalAI gateway holds the laptop GPU). **v4 = 31/57**, recall 17/34, 11 false tasks, 5 owner-named titles,
+  pieces 0/3. (t78 label relaxed after the run → v4 likely 32/57; rerun with v6.)
+- v6 (gen_data: company accounts, Hindi advice, owner's name, money splits, requests in pieces, more Hindi) queued
+  ref `73979db`: data-v6 launched 2026-11-19 03:41Z gpu3 → chain-1b-v6 (no hold) → export-1b-v6.
+- Phone: 10.63.128.3:<port> on owner's hotspot (pair again if refused; pairing expires ~7 days).
+
+## Next step
+1. When export-1b-v6 is done: download `train-1b-v6/model` from HF dataset ShreyashPoddar/paa-artifacts to
+   `models/hf/`, run `run_eval_real.sh --model .../train-1b-v4/model --model .../train-1b-v6/model`; ship v6 only if
+   it beats v4 there and on tools/eval_chats.py (phone, ≤1.2 GB PSS).
+2. Pipeline step 2 (design §3): real 60-min window with NEW markers + evidence ids (v7 ops format).
+3. Open: "aaj" in a follow-up didn't become a deadline; call transcripts still weak; P1-T7 onward.
+
 ## Done
 - **On-device model:** 4 rounds trained on the DGX (Gemma 3 1B + 270M, distilled from Qwen3-32B-AWQ, synthetic data only).
   - **Installed on phone: `paa-tasks-1b-v4.task` (4-bit, 574 MB) — phone eval 14/15**, peak app PSS ~1.13 GB, phone
