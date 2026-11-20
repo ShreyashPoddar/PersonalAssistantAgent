@@ -29,7 +29,10 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - Phone: 10.63.128.3:<port> on owner's hotspot (pair again if refused; pairing expires ~7 days).
 
 ## Next step
-1. When export-1b-v6 is done: download `train-1b-v6/model` from HF dataset ShreyashPoddar/paa-artifacts to
+0. **v6 done 2026-11-19; private set: v6 40/57 vs v4 32/57** (recall 23/36 vs 19/36, false 3 vs 9, owner-named 2 vs 5,
+   business 9/9; worse: eligible job posts 0/5, vague 0/1). Weights + `paa-tasks-1b-v6.task` in `models/hf/`. Remaining:
+   push the .task to the phone, run tools/eval_chats.py on the phone (watch PSS), install if it holds up.
+1. (done) When export-1b-v6 is done: download `train-1b-v6/model` from HF dataset ShreyashPoddar/paa-artifacts to
    `models/hf/`, run `run_eval_real.sh --model .../train-1b-v4/model --model .../train-1b-v6/model`; ship v6 only if
    it beats v4 there and on tools/eval_chats.py (phone, ≤1.2 GB PSS).
 2. Pipeline step 2 (design §3): real 60-min window with NEW markers + evidence ids (v7 ops format).
