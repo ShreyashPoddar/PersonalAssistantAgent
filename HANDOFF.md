@@ -28,6 +28,15 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   ref `73979db`: data-v6 launched 2026-11-19 03:41Z gpu3 → chain-1b-v6 (no hold) → export-1b-v6.
 - Phone: 10.63.128.3:<port> on owner's hotspot (pair again if refused; pairing expires ~7 days).
 
+## 2026-11-22
+- **v6 is the phone model** (installed 2026-11-21; v4 kept as `models/local_model_v4.task.bak` on the phone):
+  private set 40/57 vs v4 32/57; phone eval 14/15 (fail: own_promise merged "call + send ppt"), peak PSS 0.92 GB,
+  min free 1.7 GB. App build with the Hindi-title grounding fix installed. Phone backup `PAA-private/backup-2026-11-21.json`.
+- data-v7 crashed (vLLM tokenizer TypeError, traceback through transformers 5 files) → gen_data hardened (`aeea5f4`);
+  re-queued as data-v7b → chain-1b-v7b → export-1b-v7b; old chain/export-1b-v7 cancelled. If v7b crashes the same way,
+  the DGX venv likely moved to transformers 5: pin `transformers<5` in train/requirements.txt and ask the owner to run
+  scripts/dgx/setup_env.sh on campus.
+
 ## Next step
 0. **v6 done 2026-11-19; private set: v6 40/57 vs v4 32/57** (recall 23/36 vs 19/36, false 3 vs 9, owner-named 2 vs 5,
    business 9/9; worse: eligible job posts 0/5, vague 0/1). Weights + `paa-tasks-1b-v6.task` in `models/hf/`. Remaining:
