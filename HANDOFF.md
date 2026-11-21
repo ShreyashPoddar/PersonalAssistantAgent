@@ -32,6 +32,9 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 0. **v6 done 2026-11-19; private set: v6 40/57 vs v4 32/57** (recall 23/36 vs 19/36, false 3 vs 9, owner-named 2 vs 5,
    business 9/9; worse: eligible job posts 0/5, vague 0/1). Weights + `paa-tasks-1b-v6.task` in `models/hf/`. Remaining:
    push the .task to the phone, run tools/eval_chats.py on the phone (watch PSS), install if it holds up.
+   v6 misses: all eligible job posts ("announcement"), splits, pay-for-me pieces, send-me-info → **v7 queued** ref
+   `e36c5d5` (data-v7 → chain-1b-v7 → export-1b-v7). Score v7 vs v6 with run_eval_real.sh (output file is named after
+   the model dir, `model.json`: rename per model).
 1. (done) When export-1b-v6 is done: download `train-1b-v6/model` from HF dataset ShreyashPoddar/paa-artifacts to
    `models/hf/`, run `run_eval_real.sh --model .../train-1b-v4/model --model .../train-1b-v6/model`; ship v6 only if
    it beats v4 there and on tools/eval_chats.py (phone, ≤1.2 GB PSS).
