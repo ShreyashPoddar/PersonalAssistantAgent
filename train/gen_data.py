@@ -33,7 +33,10 @@ CATEGORIES = [
     ("a project group splits work and @mentions or names the owner for a part", "received burst", 2),
     ("a project group assigns work to someone else, NOT the owner", "received burst", 2),
     ("a hackathon / fest / workshop registration post, sometimes for the owner's batch, sometimes not", "received", 2),
-    ("an internship or job post that names eligible batches (sometimes includes the owner's batch, sometimes not)", "received", 2),
+    ("an internship or job post that names eligible batches (sometimes includes the owner's batch, sometimes not)", "received", 3),
+    ("a job-updates channel (chat_name like 'X - Jobs & Internships Updates') posts an opening in its usual format "
+     "(Company name / Role / Batch Eligible / Apply Link) that INCLUDES the owner's batch: a task 'Apply for <role> at "
+     "<company>' even though it is posted to everyone", "received", 4),
     ("an internship / job / placement post that @mentions the owner by name but is ONLY for a different batch year than the owner's (not a task)", "received", 2),
     ("someone in a random or unrelated group @mentions the owner with a hackathon / event registration link ('@name register for this'), not from the owner's team (not a task)", "received", 3),
     ("an advertisement, sale, cashback or promotional message", "received", 3),
@@ -67,6 +70,12 @@ CATEGORIES = [
      "owner's name", "received burst", 4),
     ("money in a flat / trip group: someone tells the owner to pay or add a split (a task) OR asks others to pay the owner "
      "back (not the owner's task)", "received burst", 3),
+    ("someone asks the owner to add or put a split in the expense app ('daal dena split', 'split daal do', 'cook ka split "
+     "add kar') or to pay a shared bill - a task", "received burst", 3),
+    ("someone asks the owner to pay for them or do something for them, sending a QR, link or details first ('UPI nahi "
+     "chal raha, mai QR bhejti hu, tum kar do', 'link bhej raha hu fill kar dena') - one task", "burst", 4),
+    ("someone asks the owner to send information they need ('send me the details', 'subdomain ka naam bata', 'apna reg "
+     "no bhej') - a task", "received burst", 3),
     ("a request that arrives in pieces: first only the need or problem ('UPI se payment nahi ho raha', 'form ka link aaya "
      "hai'), then the ask or the push ('tu kar de please', 'jaldi kar expire ho jayega') - one task", "burst", 4),
     ("the owner thinks aloud or asks a question about their own work ('case study aaj submit karu ya kal?', 'kya karna "
@@ -124,7 +133,9 @@ Rules:
 - "haan kar dunga"/"ok will do" accepts the request above it; with nothing above it is NOT a task.
 - An @mention asking the owner to confirm something ("10 final na ??") is a task: "Confirm … with <name>". The owner's
   short answer to it later ("Hn bhai", "haan final") marks that open task done.
-- Internship/job posts: only if open to the {year} batch or no batch named, even when they @mention the owner.
+- Internship/job posts: a task ("Apply for <role> at <company>") when open to the {year} batch or no batch is named —
+  even when posted to everyone or by a job-updates channel (that is not an announcement); not a task when only other
+  batches are eligible, even when they @mention the owner.
 - Hackathon/event registration links forwarded in a random or unrelated group are not tasks, even with an @mention;
   only the owner's own team/organisers asking them to register, or the owner saying they will register, is a task.
 - Use earlier lines only to fill in details (deadline, what "it" is, who); never create a task found only there —
