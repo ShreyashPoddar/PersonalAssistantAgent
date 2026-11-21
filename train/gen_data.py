@@ -203,8 +203,9 @@ def to_record(p: dict, s: dict):
         return None
     as_list = lambda v: [str(x) for x in v][:8] if isinstance(v, list) else []
     kind = p["kind"]
-    ctx = {"outgoing": kind == "sent", "chat_name": (s.get("chat_name") or None), "is_group": p["group"],
-           "sender": None if kind in ("sent", "call") else (s.get("sender") or None),
+    text_or_none = lambda v: str(v) if v not in (None, "", [], {}) else None
+    ctx = {"outgoing": kind == "sent", "chat_name": text_or_none(s.get("chat_name")), "is_group": p["group"],
+           "sender": None if kind in ("sent", "call") else text_or_none(s.get("sender")),
            "recent": as_list(s.get("earlier")), "open_tasks": as_list(s.get("open_tasks"))[:5],
            "learned": [], "is_call": kind == "call", "burst": kind == "burst"}
     return {"id": f"syn-{p['idx']}", "now": p["now"], "owner_names": p["names"], "grad_year": p["year"],
@@ -308,11 +309,27 @@ def main():
         gen_sp = SamplingParams(temperature=0.95, top_p=0.95, max_tokens=700, seed=a.seed)
         greedy = SamplingParams(temperature=0, max_tokens=500)
         sampled = SamplingParams(temperature=0.7, top_p=0.95, max_tokens=500, n=2, seed=a.seed)
-        chat = lambda convs, sp: llm.chat(convs, sp, use_tqdm=False, **kw)
+        def chat(convs, sp):
+            """llm.chat that can't take the whole job down: contents forced to str; a failing batch is retried one
+            conversation at a time and the bad ones come back as None (data-v7 crashed on a vLLM tokenizer TypeError)."""
+            convs = [[{"role": m["role"], "content": str(m["content"])} for m in c] for c in convs]
+            try:
+                return llm.chat(convs, sp, use_tqdm=False, **kw)
+            except (TypeError, ValueError) as e:
+                print(f"batch failed ({type(e).__name__}: {e}); retrying one by one", flush=True)
+                outs = []
+                for c in convs:
+                    try:
+                        outs.append(llm.chat([c], sp, use_tqdm=False, **kw)[0])
+                    except (TypeError, ValueError) as e1:
+                        print(f"dropped one conversation ({type(e1).__name__}): {repr(c)[:300]}", flush=True)
+                        outs.append(None)
+                return outs
+
         for c0 in range(0, len(todo), a.chunk):
             plans = [plan(i, a.seed) for i in todo[c0:c0 + a.chunk]]
             outs = chat([[{"role": "user", "content": gen_prompt(p)}] for p in plans], gen_sp)
-            recs = [to_record(p, first_json(o.outputs[0].text)) for p, o in zip(plans, outs)]
+            recs = [to_record(p, first_json(o.outputs[0].text)) if o is not None else None for p, o in zip(plans, outs)]
             ok = [(p, r) for p, r in zip(plans, recs) if r]
             convs = [[{"role": "system", "content": RULES.format(names=" or ".join(n.capitalize() for n in r["owner_names"]), year=r["grad_year"])},
                       {"role": "user", "content": build_prompt(r["message"], r["ctx"], datetime.fromisoformat(r["now"]), r["owner_names"], r["grad_year"]) + "\nJSON:"}]
@@ -323,6 +340,9 @@ def main():
                     if not r:
                         f.write(json.dumps({"idx": p["idx"], "keep": False, "why": "bad scenario"}) + "\n")
                 for (p, r), conv, g, s in zip(ok, convs, g_out, s_out):
+                    if g is None or s is None:
+                        f.write(json.dumps({"idx": p["idx"], "keep": False, "why": "teacher call failed"}) + "\n")
+                        continue
                     gold = first_json(g.outputs[0].text)
                     alts = [first_json(o.text) for o in s.outputs]
                     why = ("unparsable" if not isinstance(gold, dict) or not all(isinstance(x, dict) for x in alts) else
