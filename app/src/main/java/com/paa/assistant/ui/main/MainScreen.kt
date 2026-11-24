@@ -559,6 +559,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
             // ── ACTIVITY (audit log + contact rules) ──────────────────────────
             item { ActivityCard(surfaceColor, accentColor, textPrimary, textSecondary) }
             item { ScreenReadingCard(surfaceColor, accentColor, textPrimary, textSecondary) }
+            item { AlarmsCard(surfaceColor, textPrimary, textSecondary) }
 
             // ── SUMMARY CARDS ROW ─────────────────────────────────────────────
             item {

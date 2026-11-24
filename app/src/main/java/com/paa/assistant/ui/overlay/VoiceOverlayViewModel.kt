@@ -239,6 +239,18 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // Owner's "All alarms off" switch — a local setting, not an Action
+        com.paa.assistant.core.reminders.AlarmSwitch.voiceCommand(input)?.let { on ->
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            viewModelScope.launch {
+                com.paa.assistant.core.reminders.AlarmSwitch.set(repository.context, off = !on)
+                deliverResponse(
+                    if (on) "Alarms are back on for upcoming tasks."
+                    else "All alarms are off and will stay off. Say 'alarms on' to bring them back. Your tasks are kept."
+                )
+            }
+            return
+        }
         // Owner's screen-reading switch ("banking mode") — a local setting, not an Action
         com.paa.assistant.core.shield.A11yToggle.voiceCommand(input)?.let { on ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")

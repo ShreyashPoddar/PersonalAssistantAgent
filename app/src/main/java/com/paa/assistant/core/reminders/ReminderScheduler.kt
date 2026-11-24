@@ -24,6 +24,8 @@ import java.util.Calendar
  */
 object ReminderScheduler {
     private const val TAG = "ReminderScheduler"
+    private const val PREFS = "paa_alarms"
+    private const val KEY_ALARMS_OFF = "all_off"
     const val ACTION_FIRE = "com.paa.assistant.ACTION_REMINDER_FIRE"
     const val EXTRA_TASK_ID = "task_id"
     const val EXTRA_TITLE = "task_title"
@@ -46,7 +48,15 @@ object ReminderScheduler {
     /** Minutes between 9 PM and the EOD deadline, so EOD tasks get an evening heads-up. */
     const val EOD_EARLY_MINUTES = 179
 
+    /** Owner's "All alarms off" switch: saved, so it stays off across restarts and updates until turned back on. */
+    fun alarmsOff(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ALARMS_OFF, false)
+
+    fun setAlarmsOff(context: Context, off: Boolean) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ALARMS_OFF, off).apply()
+
     fun schedule(context: Context, taskId: Long, title: String, due: Long, earlyMinutes: Int) {
+        if (alarmsOff(context)) return  // tasks are kept; nothing is set to ring
         val now = System.currentTimeMillis()
         val am = context.getSystemService(AlarmManager::class.java)
 
@@ -87,6 +97,7 @@ object ReminderScheduler {
 
     /** Re-fires the DUE alert after [minutes]. */
     fun snooze(context: Context, taskId: Long, title: String, minutes: Int) {
+        if (alarmsOff(context)) return
         val at = System.currentTimeMillis() + minutes * 60_000L
         val am = context.getSystemService(AlarmManager::class.java)
         setExact(am, at, pendingIntent(context, taskId, title, KIND_DUE, at))

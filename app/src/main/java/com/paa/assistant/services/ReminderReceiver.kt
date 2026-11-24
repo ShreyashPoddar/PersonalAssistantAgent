@@ -31,6 +31,8 @@ class ReminderReceiver : BroadcastReceiver() {
         val kind = intent.getStringExtra(ReminderScheduler.EXTRA_KIND) ?: ReminderScheduler.KIND_DUE
         val due = intent.getLongExtra(ReminderScheduler.EXTRA_DUE, System.currentTimeMillis())
         if (taskId == -1L) return
+        // "All alarms off": alarms set before the switch was flipped stay silent too
+        if (ReminderScheduler.alarmsOff(context)) return
 
         // Skip alerts for tasks completed or deleted since the alarm was set
         val pendingResult = goAsync()
