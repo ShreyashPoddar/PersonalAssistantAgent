@@ -546,7 +546,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                 Text("No chat messages checked since the app started.", color = textSecondary, fontSize = 11.sp)
                             }
                             val fmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-                            chatChecks.forEach { e ->
+                            chatChecks.take(100).forEach { e ->  // the log keeps more (for reviews); 100 is plenty here
                                 Column(modifier = Modifier.padding(vertical = 3.dp)) {
                                     Text("${fmt.format(Date(e.time))}  ${e.source}", color = textSecondary, fontSize = 10.sp)
                                     Text("\"${e.snippet}\"", color = textPrimary, fontSize = 11.sp)
