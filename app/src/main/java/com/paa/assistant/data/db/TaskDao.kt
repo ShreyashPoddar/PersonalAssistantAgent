@@ -74,6 +74,10 @@ interface TaskDao {
     """)
     suspend fun getUpcomingTasks(limit: Int = 5): List<TaskEntity>
 
+    /** Pending tasks with no deadline (none was said), newest first — shown in the summaries since they never ring. */
+    @Query("SELECT * FROM tasks WHERE status = 'PENDING' AND dueTimestamp IS NULL ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun getUndatedTasks(limit: Int = 5): List<TaskEntity>
+
     /** Pending tasks due from [now] on, soonest first (no undated or overdue ones). */
     @Query("SELECT * FROM tasks WHERE status = 'PENDING' AND dueTimestamp >= :now ORDER BY dueTimestamp ASC LIMIT :limit")
     suspend fun getNextTasks(now: Long = System.currentTimeMillis(), limit: Int = 5): List<TaskEntity>

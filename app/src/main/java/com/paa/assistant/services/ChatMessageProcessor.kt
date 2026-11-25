@@ -269,6 +269,10 @@ class ChatMessageProcessor @Inject constructor(
         }.orEmpty()
         // A bare "ok"/"hn bhai" can only finish a task from this same chat
         if (text.length < 2 || (trivial.matches(text) && chatTasks.isEmpty())) { if (!remembered) remember(msg); return found }
+        // Call transcripts like "हेलो हेलो." or a few words can't hold a task; the model only invented ones from them
+        if (msg.app == ChatApp.CALL && text.split(Regex("\\s+")).count { w -> w.count(Char::isLetterOrDigit) >= 2 } < 5) {
+            DetectionLog.add("📞 call", text, "skipped: too little speech in the recording"); return found
+        }
         val openTasks = (chatTasks + if (msg.outgoing) taskDao.getUpcomingTasks(8) else emptyList()).distinctBy { it.id }.take(8)
         val source = describeSource(msg)
         val allowHackathon = hackathonAllowed(msg)

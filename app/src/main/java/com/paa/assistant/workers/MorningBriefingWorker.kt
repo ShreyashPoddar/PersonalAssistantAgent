@@ -41,6 +41,7 @@ class MorningBriefingWorker @AssistedInject constructor(
         try {
             val overdue = database.taskDao().getOverdueTasks()
             val allUpcoming = database.taskDao().getNextTasks(limit = 10)
+            val undated = database.taskDao().getUndatedTasks(limit = 5)
             val calendarEvents = calendarManager.getTodayEvents()
 
             val calendarSummary = if (calendarEvents.isNotEmpty()) {
@@ -56,6 +57,8 @@ class MorningBriefingWorker @AssistedInject constructor(
             val summary = buildString {
                 append(buildFallbackSummary(overdue.size, allUpcoming.size))
                 if (calendarEvents.isNotEmpty()) append("\nCalendar: ").append(calendarSummary)
+                // No deadline was said for these, so they never ring: the summary is where they show up
+                if (undated.isNotEmpty()) append("\nNo deadline: ").append(undated.joinToString("; ") { it.title })
                 if (!plan.isNullOrBlank() && !plan.startsWith("Nothing")) append("\n\n").append(plan)
             }
 
