@@ -157,6 +157,9 @@ def main():
         print(f"{'PASS' if not fails else 'FAIL'}  {s['id']}  ({rows[-1][2]}s)", flush=True)
         for f in fails:
             print("      " + f, flush=True)
+    # Remove only this run's scenario tasks and chat lines (the owner's own data is left alone)
+    adb(a.serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
+        "--es", "delete_source_like", f"E{run_id}")
     passed = sum(1 for r in rows if r[1])
     print(f"\n{passed}/{len(rows)} passed")
     sys.exit(0 if passed == len(rows) else 1)
