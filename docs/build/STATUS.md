@@ -40,7 +40,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P2-T6 Statement PDF import (optional)
 - [~] P2-T7 IOU ledger (in DB v7) — code + tests; phone check pending
 - [~] P2-T8 Ask-anything about money (local) — code + tests; phone check pending
-- [ ] P2-T9 Privacy audit
+- [x] P2-T9 Privacy audit (MoneyPrivacyTest: no money in cloud code or logs; money answers kept out of cloud history)
 - [ ] Phase 2 exit check
 
 ## Phase 3 — orders + travel (`P3_orders_travel.md`)
