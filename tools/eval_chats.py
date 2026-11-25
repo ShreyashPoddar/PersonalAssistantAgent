@@ -39,7 +39,7 @@ def log_entries(serial):
         return []
 
 
-def inject(serial, chat, step, group, sender):
+def inject(serial, chat, step, group, sender, business=False):
     q = lambda s: "'" + s.replace("'", "") + "'"
     args = ["shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
             "--es", "text", q(step["text"]), "--es", "chat", q(chat)]
@@ -49,6 +49,8 @@ def inject(serial, chat, step, group, sender):
         args += ["--es", "sender", q(sender)]
     if step.get("out"):
         args += ["--ez", "out", "true"]
+    if business:  # a company/bot account: not a saved contact (SenderKinds)
+        args += ["--ez", "business", "true"]
     adb(serial, *args)
 
 
@@ -68,14 +70,16 @@ def wait_results(serial, chat, since_ms, timeout=420):
     return []
 
 
-def run_chat(serial, chat, steps, group, sender):
+def run_chat(serial, chat, steps, group, sender, business=False):
     results, since = [], int(time.time() * 1000)
     for step in steps:
-        if step.get("wait"):
+        if step.get("sleep"):  # messages minutes apart (requests in pieces)
+            time.sleep(step["sleep"])
+        elif step.get("wait"):
             results += wait_results(serial, chat, since)
             since = int(time.time() * 1000)
         else:
-            inject(serial, chat, step, group, sender)
+            inject(serial, chat, step, group, sender, business)
             time.sleep(3)
     return results
 
@@ -147,7 +151,7 @@ def main():
     for s in scenarios:
         t0 = time.time()
         chat = f"{s['chat']} E{run_id}"
-        results = run_chat(a.serial, chat, s["steps"], s.get("group", False), s.get("sender"))
+        results = run_chat(a.serial, chat, s["steps"], s.get("group", False), s.get("sender"), s.get("business", False))
         fails = check(s["expect"], results)
         if "also_chat" in s:
             other = f"{s['also_chat']['chat']} E{run_id}"
