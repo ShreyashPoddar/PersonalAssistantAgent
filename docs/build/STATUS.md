@@ -54,7 +54,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] Phase 3 exit check
 
 ## Phase 4 — calls + hub (`P4_calls_hub.md`)
-- [ ] P4-T1 Hub skeleton
+- [~] P4-T1 Hub skeleton — hub/server.py (HTTPS, pinned self-signed cert, token; 4 tests incl. HTTPS round trip) + HubClient/HubCard on the phone (tests); owner pairs (Windows firewall prompt)
 - [ ] P4-T2 Bluetooth hands-free bridge (Test 12)
 - [ ] P4-T3 AI voice agent on the hub
 - [ ] P4-T4 Live call understanding

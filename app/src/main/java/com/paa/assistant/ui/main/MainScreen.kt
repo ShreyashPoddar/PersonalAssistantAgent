@@ -563,6 +563,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
             item { ScreenReadingCard(surfaceColor, accentColor, textPrimary, textSecondary) }
             item { AlarmsCard(surfaceColor, textPrimary, textSecondary) }
             item { MoneyCard(surfaceColor, accentColor, textPrimary, textSecondary) }
+            item { HubCard(surfaceColor, accentColor, textPrimary, textSecondary) }
 
             // ── SUMMARY CARDS ROW ─────────────────────────────────────────────
             item {
