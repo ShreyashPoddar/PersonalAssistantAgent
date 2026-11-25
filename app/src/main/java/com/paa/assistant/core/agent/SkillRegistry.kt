@@ -11,13 +11,15 @@ import javax.inject.Singleton
 class SkillRegistry @Inject constructor(
     private val message: MessageSkill,
     private val alarm: AlarmSkill,
-    private val call: CallSkill
+    private val call: CallSkill,
+    private val openApp: com.paa.assistant.core.skills.OpenAppSkill
 ) {
     @Suppress("UNCHECKED_CAST")
     fun forAction(a: Action): Skill<Action>? = when (a) {
         is Action.SendMessage -> message
         is Action.SetAlarm -> alarm
         is Action.PlaceCall -> call
+        is Action.OpenApp -> openApp
         else -> null
     } as Skill<Action>?
 }

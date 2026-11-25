@@ -42,6 +42,7 @@ fun VoiceOverlayScreen(
     onDismiss: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(uiState.close) { if (uiState.close) onDismiss() }
     var typedQuery by remember { mutableStateOf("") }
 
     val bgGradient = Brush.radialGradient(

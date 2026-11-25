@@ -41,7 +41,9 @@ data class VoiceUiState(
     val responseText: String = "",          // PAA's response to display
     val errorMessage: String = "",
     /** A message waiting for the owner's OK: shown with Send / Cancel. */
-    val pendingSend: PendingSend? = null
+    val pendingSend: PendingSend? = null,
+    /** Close the popup (e.g. an app was just opened on top). */
+    val close: Boolean = false
 )
 
 data class PendingSend(
@@ -74,7 +76,8 @@ class VoiceOverlayViewModel @Inject constructor(
     private val calendarManager: CalendarManager,
     private val geofenceManager: GeofenceManager,
     private val claude: com.paa.assistant.core.ai.ClaudeClient,
-    private val executor: com.paa.assistant.core.agent.Executor
+    private val executor: com.paa.assistant.core.agent.Executor,
+    private val appDirectory: com.paa.assistant.core.skills.AppDirectory
 ) : ViewModel() {
 
     private val tag = "VoiceOverlayVM"
@@ -239,6 +242,19 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // "open insta" / "youtube kholo": on-device, no model (P1-T8)
+        com.paa.assistant.core.skills.AppDirectory.parseOpen(input)?.let { phrase ->
+            val app = com.paa.assistant.core.skills.AppDirectory.match(phrase, appDirectory.apps())
+            if (app != null) {
+                _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+                viewModelScope.launch {
+                    val r = executor.submit(com.paa.assistant.core.agent.Action.OpenApp(app.pkg, app.label), commandSource)
+                    deliverResponse(r.message)
+                    if (r.ok) _uiState.value = _uiState.value.copy(close = true)
+                }
+                return
+            }
+        }
         // Owner's "All alarms off" switch — a local setting, not an Action
         com.paa.assistant.core.reminders.AlarmSwitch.voiceCommand(input)?.let { on ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
