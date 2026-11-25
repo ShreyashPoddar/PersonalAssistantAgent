@@ -23,7 +23,10 @@ object SenderKinds {
     @Volatile private var loadedAt = 0L
 
     /** Pure part, unit-tested: [contactNames] are lowercase saved-contact names. */
-    fun classify(chatName: String?, isGroup: Boolean, isCall: Boolean, contactNames: Set<String>, contactsReadable: Boolean): SenderKind {
+    fun classify(
+        chatName: String?, isGroup: Boolean, isCall: Boolean, contactNames: Set<String>, contactsReadable: Boolean,
+        app: ChatApp = ChatApp.WHATSAPP
+    ): SenderKind {
         val chat = chatName?.trim().orEmpty()
         val lc = chat.lowercase(Locale.ROOT)
         return when {
@@ -32,6 +35,9 @@ object SenderKinds {
             isGroup -> SenderKind.GROUP
             chat.isEmpty() -> SenderKind.UNKNOWN_NUMBER
             PHONE.matches(chat) || chat.startsWith("~") -> SenderKind.UNKNOWN_NUMBER
+            // Telegram shows its own names (not the phone's contacts): only bots and channels are businesses there
+            app == ChatApp.TELEGRAM ->
+                if (Regex("(?i)(bot$|\\bbot\\b|channel|official|updates|news)").containsMatchIn(chat)) SenderKind.BUSINESS else SenderKind.PERSON
             !contactsReadable -> SenderKind.PERSON  // can't tell without the Contacts permission: keep old behaviour
             lc in contactNames -> SenderKind.PERSON
             JOB_CHAT.containsMatchIn(chat) -> SenderKind.JOB_CHANNEL
@@ -42,7 +48,7 @@ object SenderKinds {
     fun of(context: Context, msg: ChatMessage): SenderKind {
         val readable = ContactResolver.hasPermission(context)
         if (readable && System.currentTimeMillis() - loadedAt > 10 * 60_000L) reload(context)
-        return classify(msg.chatName, msg.isGroup, msg.app == ChatApp.CALL, names + testPeople, readable)
+        return classify(msg.chatName, msg.isGroup, msg.app == ChatApp.CALL, names + testPeople, readable, msg.app)
     }
 
     private fun reload(context: Context) {

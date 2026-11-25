@@ -72,6 +72,10 @@ class ChatTaskChecksTest {
         assertEquals(SenderKind.JOB_CHANNEL, k("Krishan Kumar - Jobs & Internships Updates"))
         assertEquals(SenderKind.GROUP, k("GOA", group = true))
         assertEquals(SenderKind.SYSTEM, k("WhatsApp"))
+        // Telegram names aren't phone contacts: people stay people, bots/channels don't
+        assertEquals(SenderKind.PERSON, SenderKinds.classify("Kabir", false, false, contacts, true, ChatApp.TELEGRAM))
+        assertEquals(SenderKind.BUSINESS, SenderKinds.classify("Quiz Bot", false, false, contacts, true, ChatApp.TELEGRAM))
+        assertEquals(SenderKind.BUSINESS, SenderKinds.classify("Placement Updates", false, false, contacts, true, ChatApp.TELEGRAM))
         // Without the Contacts permission nobody is called a business
         assertEquals(SenderKind.PERSON, SenderKinds.classify("Goibibo", false, false, emptySet(), false))
     }
