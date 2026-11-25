@@ -28,6 +28,20 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   ref `73979db`: data-v6 launched 2026-11-19 03:41Z gpu3 → chain-1b-v6 (no hold) → export-1b-v6.
 - Phone: 10.63.128.3:<port> on owner's hotspot (pair again if refused; pairing expires ~7 days).
 
+## 2026-11-26 (overnight, owner asleep)
+- Phase 1 code complete: T7 banking guide (doc + dialog), T8 app launcher, T9 SOS (not run — drill sends a real SMS),
+  T10 TextSanitizer, T11 NodeFilter, T12 Safety card + Lockdown tile, T13 dev-options reminder (mutable). Plus
+  all-alarms-off switch, bare "aaj/today/eod" deadline. STATUS.md marks what still needs a phone check.
+- Phase 2 code: BankSmsParser/Categorizer/Ledger/MoneyQuery (pure, synthetic tests), DB v7 (transactions,
+  merchant_rules, ledger; migration 6→7 verified on emulator), MoneyIntake (UPI notifications + bank SMS receiver +
+  on-demand backfill), Money card, voice money questions + "X owes me 500", SMS + email skills, MoneyPrivacyTest.
+- Models: v7b private set **46/57** (v6 40, v4 32): job posts 5/5, owner-named 0, requests 9/15. Phone eval of v7b
+  running/see below; PSS ~1.17 GB (v6 0.92). v6 kept on phone as local_model_v6.task.bak, v4 as local_model_v4.task.bak.
+  v8 queued (`21d28f6`, more plain-request weight).
+- Phone tests collide with leftover test tasks from earlier eval runs (titles like "Send English essay to Zoya") —
+  clean tagged test tasks (sourceApp with " E" + 4 digits) after evals; eval_chats only removes its own run's tag.
+- adb: background keepalive script in scratchpad (reconnects every 30 s); phone 192.168.1.5:<port>.
+
 ## 2026-11-22
 - **v6 is the phone model** (installed 2026-11-21; v4 kept as `models/local_model_v4.task.bak` on the phone):
   private set 40/57 vs v4 32/57; phone eval 14/15 (fail: own_promise merged "call + send ppt"), peak PSS 0.92 GB,
