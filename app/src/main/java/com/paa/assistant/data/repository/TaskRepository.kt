@@ -142,6 +142,9 @@ class TaskRepository @Inject constructor(
     suspend fun getTaskById(taskId: Long): TaskEntity? = taskDao.getById(taskId)
 
     /** Deletes every pending task auto-detected from chats (and its alarms). Returns how many. */
+    /** Every pending task that came from a chat, with or without a deadline. */
+    suspend fun pendingChatTasks() = taskDao.getPendingChatTasks()
+
     suspend fun deleteAllChatTasks(): Int {
         val tasks = taskDao.getPendingChatTasks()
         tasks.forEach { deleteTask(it.id) }

@@ -104,7 +104,8 @@ class ChatTaskScheduler @Inject constructor(
         val now = System.currentTimeMillis()
         // Serialize so two notifications arriving together can't both create the task
         mutex.withLock {
-            val existing = repository.getUpcomingTasks(200).firstOrNull { isSameTask(it.title, title) }
+            // Pending chat tasks too: tasks with no deadline aren't "upcoming", and were created twice
+            val existing = (repository.getUpcomingTasks(200) + repository.pendingChatTasks()).firstOrNull { isSameTask(it.title, title) }
             if (existing != null) {
                 // Already scheduled — only move it up if this message gives an earlier real deadline
                 val oldDue = existing.dueTimestamp
