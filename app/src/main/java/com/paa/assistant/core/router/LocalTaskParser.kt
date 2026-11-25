@@ -547,7 +547,25 @@ class LocalTaskParser @Inject constructor() {
     }
 
     /** Resolves a when-phrase copied from a message ("by 140", "kal 5 baje", "tonight") to a timestamp. */
-    fun resolveWhen(phrase: String): Long? = extractTimestamp(normalizeInput(phrase))
+    fun resolveWhen(phrase: String, now: Long = System.currentTimeMillis()): Long? =
+        extractTimestamp(normalizeInput(phrase)) ?: todayOnly(phrase, now)
+
+    private val todayOnlyWords = Regex(
+        "^(by |before )?(aaj|today|aaj tak|aaj hi|aaj ke aaj|today itself|eod|end of day|end of the day|aaj shaam tak)$"
+    )
+
+    /**
+     * "aaj" / "today" / "eod" with no time: 6 PM, so the alarm rings inside the ringing window; after 4 PM, two hours
+     * from now (at most 11 PM). Before this they gave no deadline at all.
+     */
+    internal fun todayOnly(phrase: String, now: Long): Long? {
+        if (!todayOnlyWords.matches(phrase.trim().lowercase(Locale.ROOT).trimEnd('.', '!'))) return null
+        val sixPm = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.HOUR_OF_DAY, 18); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val elevenPm = sixPm + 5 * 3_600_000L
+        return if (now < sixPm - 2 * 3_600_000L) sixPm else minOf(now + 2 * 3_600_000L, elevenPm).takeIf { it > now }
+    }
 
     /** Removes time/day expressions from free text (used to clean task titles). */
     fun stripTimeWords(text: String): String = text
