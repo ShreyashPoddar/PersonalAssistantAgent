@@ -23,7 +23,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [x] P1-T5 Route existing actions (message/alarm/call/auto-reply) through Executor
 - [x] P1-T6 Owner-controlled screen-reading switch (tile + settings + voice)
 - [~] P1-T7 Banking-separation guide (no automation) — guide + in-app dialog done; owner picks profile vs toggle
-- [~] P1-T8 Instant app launcher — code + tests done; phone timing check pending
+- [~] P1-T8 Instant app launcher — works on the phone ("open youtube" via PAA → YouTube in 3.8 s incl. cold popup + adb polling); owner stopwatch check of speech→app pending
 - [~] P1-T9 SOS — code + tests done; owner sets contacts + runs a drill (sends a real SMS to own number)
 - [x] P1-T10 Text sanitiser
 - [~] P1-T11 Accessibility perception hardening — code + tests done; phone check (WhatsApp reading still works) pending

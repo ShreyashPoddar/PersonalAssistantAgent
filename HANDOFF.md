@@ -35,10 +35,14 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - Phase 2 code: BankSmsParser/Categorizer/Ledger/MoneyQuery (pure, synthetic tests), DB v7 (transactions,
   merchant_rules, ledger; migration 6→7 verified on emulator), MoneyIntake (UPI notifications + bank SMS receiver +
   on-demand backfill), Money card, voice money questions + "X owes me 500", SMS + email skills, MoneyPrivacyTest.
-- Models: v7b private set **46/57** (v6 40, v4 32): job posts 5/5, owner-named 0, requests 9/15. Phone eval of v7b
-  running/see below; PSS ~1.17 GB (v6 0.92). v6 kept on phone as local_model_v6.task.bak, v4 as local_model_v4.task.bak.
+- **v7b is the phone model** (installed 2026-11-26): private set 46/57 (v6 40, v4 32); clean phone eval 14/15
+  (fail: own_promise read as a confirmation — passed in the previous run), peak PSS 1.07 GB, min free 2.6 GB.
+  Private set now 64 cases (7 from 19–26 Nov; new failure type "someone else's promise" → in gen_data for v9). v6 kept on phone as local_model_v6.task.bak, v4 as local_model_v4.task.bak.
   v8 queued (`21d28f6`, more plain-request weight).
-- Phone tests collide with leftover test tasks from earlier eval runs (titles like "Send English essay to Zoya") —
+- Fixed tonight: eval_chats cleanup line had never landed (blocked command on 2026-11-19) → test tasks piled up on the
+  phone (18 removed, all test-tagged); SOS without location permission would have died on Android 14+; Telegram chats
+  were all classed as businesses; no-deadline tasks weren't deduped or shown in the morning summary; UPI-app wording.
+- (old note) Phone tests collide with leftover test tasks from earlier eval runs (titles like "Send English essay to Zoya") —
   clean tagged test tasks (sourceApp with " E" + 4 digits) after evals; eval_chats only removes its own run's tag.
 - adb: background keepalive script in scratchpad (reconnects every 30 s); phone 192.168.1.5:<port>.
 
