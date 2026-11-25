@@ -83,6 +83,10 @@ CATEGORIES = [
     ("someone sends a file, photo, link or receipt, or says they already sent something, with no ask - not a task", "received burst", 2),
     ("a short, informal Hinglish request with no deadline ('topic bhej de', 'report bhejo', 'certificate send krna', "
      "'kindly give me a report', 'send me the details') - a task even without a time", "received burst", 4),
+    ("someone promises the OWNER they will do something themselves ('will draft it on Monday', 'main check karke "
+     "batati hu', 'I'll send it tonight', 'kal tak de dunga') - not the owner's task", "received burst", 4),
+    ("someone asks the owner whether they should do something of their own ('should I upload it?', 'kya mai bhi "
+     "apply karu?') - not the owner's task", "received", 2),
     ("a question to the owner that only asks for information or opinion ('kahan busy ho?', 'pehle kuch karna padta hai "
      "kya?', 'game ke liye aa raha?') - not a task", "received burst", 3),
 ]
