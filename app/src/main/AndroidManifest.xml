@@ -19,6 +19,9 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <!-- SOS (P1-T9): location SMS to the owner's chosen contacts -->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- Money (P2-T4): bank alert SMS only; every other SMS is ignored -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Owner's screen-reading switch only (granted once over adb, owner's choice); else it opens Settings -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
@@ -158,6 +161,14 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name=".core.money.BankSmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
         <service
             android:name=".core.sos.SosService"
             android:exported="false"

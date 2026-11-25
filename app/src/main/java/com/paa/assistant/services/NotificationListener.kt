@@ -26,6 +26,7 @@ class NotificationListener : NotificationListenerService() {
     @Inject lateinit var processor: ChatMessageProcessor
     @Inject lateinit var callRecordings: CallRecordingProcessor
     @Inject lateinit var executor: com.paa.assistant.core.agent.Executor
+    @Inject lateinit var moneyIntake: com.paa.assistant.core.money.MoneyIntake
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -75,6 +76,14 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
+        // UPI / bank app notifications → money (P2-T4); text never logged
+        if (sbn.packageName in com.paa.assistant.core.money.BankSmsParser.UPI_PACKAGES) {
+            val ex = sbn.notification.extras
+            val text = listOfNotNull(ex.getCharSequence(Notification.EXTRA_TITLE), ex.getCharSequence(Notification.EXTRA_BIG_TEXT)
+                ?: ex.getCharSequence(Notification.EXTRA_TEXT)).joinToString(". ")
+            scope.launch(Dispatchers.IO) { runCatching { moneyIntake.add(text, sbn.packageName, sbn.postTime, "NOTIF") } }
+            return
+        }
         val app = apps[sbn.packageName] ?: return
         val notification = sbn.notification
         if (notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return  // "5 messages from 2 chats"

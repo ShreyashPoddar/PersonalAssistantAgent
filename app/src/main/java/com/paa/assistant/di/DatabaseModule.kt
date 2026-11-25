@@ -52,4 +52,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAuditDao(db: AppDatabase): com.paa.assistant.data.db.AuditDao = db.auditDao()
+
+    @Provides
+    @Singleton
+    fun provideMoneyDao(db: AppDatabase): com.paa.assistant.data.db.MoneyDao = db.moneyDao()
 }

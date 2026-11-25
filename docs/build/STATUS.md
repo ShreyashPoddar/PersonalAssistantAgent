@@ -35,11 +35,11 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P2-T1 Notification-reply messaging
 - [ ] P2-T2 SMS send + inbox read
 - [ ] P2-T3 Email (share-intent)
-- [ ] P2-T4 Bank SMS + UPI notification parser (+ DB v7)
-- [ ] P2-T5 Expense categoriser (+ DB v8)
+- [~] P2-T4 Bank SMS + UPI notification parser (+ DB v7) — code + synthetic tests; phone Test 14 pending
+- [~] P2-T5 Expense categoriser (in DB v7) — code + tests; phone check pending
 - [ ] P2-T6 Statement PDF import (optional)
-- [ ] P2-T7 IOU ledger (+ DB v9)
-- [ ] P2-T8 Ask-anything about money (local)
+- [~] P2-T7 IOU ledger (in DB v7) — code + tests; phone check pending
+- [~] P2-T8 Ask-anything about money (local) — code + tests; phone check pending
 - [ ] P2-T9 Privacy audit
 - [ ] Phase 2 exit check
 

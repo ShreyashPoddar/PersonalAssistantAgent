@@ -77,7 +77,8 @@ class VoiceOverlayViewModel @Inject constructor(
     private val geofenceManager: GeofenceManager,
     private val claude: com.paa.assistant.core.ai.ClaudeClient,
     private val executor: com.paa.assistant.core.agent.Executor,
-    private val appDirectory: com.paa.assistant.core.skills.AppDirectory
+    private val appDirectory: com.paa.assistant.core.skills.AppDirectory,
+    private val moneyDao: com.paa.assistant.data.db.MoneyDao
 ) : ViewModel() {
 
     private val tag = "VoiceOverlayVM"
@@ -242,6 +243,29 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // Money, answered from the phone's own data only — never the cloud (P2-T7/T8)
+        com.paa.assistant.core.money.Ledger.parseNote(input)?.let { (person, paise, dir) ->
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            viewModelScope.launch {
+                moneyDao.addIou(com.paa.assistant.data.models.LedgerEntryEntity(person = person, amountPaise = paise, direction = dir,
+                    reason = null, sourceChat = null, createdAt = System.currentTimeMillis()))
+                deliverResponse(if (dir == "OWED_TO_ME") "Noted: $person owes you ₹${paise / 100}." else "Noted: you owe $person ₹${paise / 100}.")
+            }
+            return
+        }
+        if (com.paa.assistant.core.money.MoneyQuery.isMoneyQuestion(input)) {
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            lastInputPrivate = true  // money answers never go into the cloud conversation history
+            viewModelScope.launch {
+                val rows = moneyDao.since(System.currentTimeMillis() - 400L * 86_400_000L)
+                val answer = com.paa.assistant.core.money.MoneyQuery.answer(
+                    input, rows.map { it.toTxn() }, rows.associate { it.id to (it.category ?: "Uncategorised") },
+                    moneyDao.openIous().map { it.toIou() }, System.currentTimeMillis()
+                )
+                deliverResponse(answer ?: "I couldn't answer that from your bank messages yet. Try \"how much did I spend this month\".")
+            }
+            return
+        }
         // "SOS" / "bachao" (whole utterance): straight to the SOS countdown, no model (P1-T9)
         if (com.paa.assistant.core.sos.SosMessage.isTrigger(input)) {
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")

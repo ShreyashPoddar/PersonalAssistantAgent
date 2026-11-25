@@ -22,7 +22,7 @@ object BankSmsParser {
     )
     val UPI_PACKAGES = setOf(
         "com.google.android.apps.nbu.paisa.user", "com.phonepe.app", "net.one97.paytm", "in.org.npci.upiapp",
-        "in.amazon.mShop.android.shopping", "com.whatsapp", "com.axis.mobile", "com.csam.icici.bank.imobile"
+        "com.axis.mobile", "com.csam.icici.bank.imobile", "com.sbi.upi", "com.snapwork.hdfc", "com.mobikwik_new"
     )
 
     private val AMOUNT = Regex("(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)", RegexOption.IGNORE_CASE)

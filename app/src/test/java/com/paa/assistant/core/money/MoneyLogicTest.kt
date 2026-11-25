@@ -75,5 +75,6 @@ class MoneyLogicTest {
         assertTrue(MoneyQuery.isMoneyQuestion("kitna kharcha hua is hafte"))
         assertFalse(MoneyQuery.isMoneyQuestion("send 500 to Rahul"))
         assertFalse(MoneyQuery.isMoneyQuestion("remind me to call mom"))
+        assertFalse(MoneyQuery.isMoneyQuestion("kal paise bhejne hai yaad dilana"))
     }
 }

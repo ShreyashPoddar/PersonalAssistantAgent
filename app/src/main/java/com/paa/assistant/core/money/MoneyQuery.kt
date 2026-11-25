@@ -14,7 +14,10 @@ object MoneyQuery {
         RegexOption.IGNORE_CASE
     )
 
-    fun isMoneyQuestion(s: String) = MONEY_WORDS.containsMatchIn(s) && !Regex("^(send|pay|transfer|bhej)\\b", RegexOption.IGNORE_CASE).containsMatchIn(s.trim())
+    /** A question about the owner's money — not a command or a reminder that mentions money ("paise bhejne hai yaad dilana"). */
+    fun isMoneyQuestion(s: String) = MONEY_WORDS.containsMatchIn(s) &&
+        !Regex("^(send|pay|transfer|bhej)\\b", RegexOption.IGNORE_CASE).containsMatchIn(s.trim()) &&
+        !Regex("\\b(remind|reminder|yaad|alarm|baje|tomorrow|kal tak)\\b", RegexOption.IGNORE_CASE).containsMatchIn(s)
 
     private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 

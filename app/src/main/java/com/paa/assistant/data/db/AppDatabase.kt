@@ -19,8 +19,10 @@ import com.paa.assistant.data.models.TaskFeedbackEntity
  */
 @Database(
     entities = [TaskEntity::class, MemoryFactEntity::class, FileIndexEntity::class, TaskFeedbackEntity::class, com.paa.assistant.data.models.ChatLineEntity::class,
-        com.paa.assistant.data.models.ContactRuleEntity::class, com.paa.assistant.data.models.AuditEntryEntity::class],
-    version = 6,
+        com.paa.assistant.data.models.ContactRuleEntity::class, com.paa.assistant.data.models.AuditEntryEntity::class,
+        com.paa.assistant.data.models.TransactionEntity::class, com.paa.assistant.data.models.MerchantRuleEntity::class,
+        com.paa.assistant.data.models.LedgerEntryEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chatHistoryDao(): ChatHistoryDao
     abstract fun contactRuleDao(): ContactRuleDao
     abstract fun auditDao(): AuditDao
+    abstract fun moneyDao(): MoneyDao
 
     companion object {
         const val DATABASE_NAME = "paa_database"
@@ -84,6 +87,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v7: money — transactions (bank SMS / UPI notifications), the owner's category rules, who-owes-whom. */
+        private val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `transactions` (`id` TEXT NOT NULL, `at` INTEGER NOT NULL, `amountPaise` INTEGER NOT NULL, " +
+                        "`direction` TEXT NOT NULL, `channel` TEXT NOT NULL, `counterparty` TEXT, `refId` TEXT, `balancePaise` INTEGER, " +
+                        "`bank` TEXT NOT NULL, `category` TEXT, `note` TEXT, `source` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_at` ON `transactions` (`at`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `merchant_rules` (`counterpartyKey` TEXT NOT NULL, `category` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`counterpartyKey`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ledger` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `person` TEXT NOT NULL, " +
+                        "`amountPaise` INTEGER NOT NULL, `direction` TEXT NOT NULL, `reason` TEXT, `sourceChat` TEXT, " +
+                        "`createdAt` INTEGER NOT NULL, `settledAt` INTEGER)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -103,7 +127,7 @@ abstract class AppDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(SupportOpenHelperFactory(passphrase.toByteArray()))
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
