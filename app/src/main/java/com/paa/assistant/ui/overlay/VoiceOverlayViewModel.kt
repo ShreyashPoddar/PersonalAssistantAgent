@@ -242,6 +242,16 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // "SOS" / "bachao" (whole utterance): straight to the SOS countdown, no model (P1-T9)
+        if (com.paa.assistant.core.sos.SosMessage.isTrigger(input)) {
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            viewModelScope.launch {
+                val src = if (commandSource == com.paa.assistant.core.agent.CommandSource.OWNER_UI) commandSource
+                    else com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
+                deliverResponse(executor.submit(com.paa.assistant.core.agent.Action.Sos("voice"), src).message)
+            }
+            return
+        }
         // "open insta" / "youtube kholo": on-device, no model (P1-T8)
         com.paa.assistant.core.skills.AppDirectory.parseOpen(input)?.let { phrase ->
             val app = com.paa.assistant.core.skills.AppDirectory.match(phrase, appDirectory.apps())

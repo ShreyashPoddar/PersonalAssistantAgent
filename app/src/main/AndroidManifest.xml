@@ -17,6 +17,9 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- CallSkill: place a call directly (else it opens the dialer) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- SOS (P1-T9): location SMS to the owner's chosen contacts -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Owner's screen-reading switch only (granted once over adb, owner's choice); else it opens Settings -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
@@ -148,6 +151,26 @@
             android:name=".services.PAATileService"
             android:exported="true"
             android:label="@string/tile_label"
+            android:icon="@drawable/ic_mic"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".core.sos.SosService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+        <activity
+            android:name=".core.sos.SosSafeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.PAA.Overlay" />
+        <service
+            android:name=".core.sos.SosTileService"
+            android:exported="true"
+            android:label="PAA SOS"
             android:icon="@drawable/ic_mic"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
