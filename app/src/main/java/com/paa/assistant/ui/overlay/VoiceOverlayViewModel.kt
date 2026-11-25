@@ -248,6 +248,25 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // "bus from Chennai to Hosur on Friday" → web fares (route + date only, no personal data); booking stays with you (P3-T5)
+        com.paa.assistant.core.skills.TravelQuery.parse(input)?.let { q ->
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            viewModelScope.launch {
+                val date = q.whenPhrase?.let { parser.resolveWhen(it) }?.let {
+                    java.text.SimpleDateFormat("EEE d MMM yyyy", java.util.Locale.ENGLISH).format(java.util.Date(it))
+                } ?: q.whenPhrase
+                val answer = runCatching { geminiClient.searchWeb(q.webQuestion(date)) }.getOrNull()?.takeIf { it.isNotBlank() }
+                if (answer != null) deliverResponse(answer + "\n\nBook in the app you prefer — PAA doesn't book or pay.")
+                else {
+                    runCatching {
+                        repository.context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(q.searchUrl(date))).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                    deliverResponse("Opened a search for ${mapOf("bus" to "buses", "train" to "trains", "flight" to "flights")[q.modes.first()]} from ${q.from} to ${q.to}" + (date?.let { " on $it" } ?: "") + ".")
+                }
+            }
+            return
+        }
         // "write an email to a@b.com saying …" → Gmail compose, filled in; the owner taps Send (P2-T3)
         com.paa.assistant.core.skills.EmailSkill.parse(input)?.let { (to, subject, body) ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")

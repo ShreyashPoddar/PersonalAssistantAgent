@@ -48,7 +48,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P3-T2 Screen-flow engine
 - [ ] P3-T3 Swiggy/Zomato via MCP (if terms allow — Test 13)
 - [ ] P3-T4 Shopping flows (Blinkit→Zepto→Amazon→Flipkart→Myntra)
-- [ ] P3-T5 Travel compare
+- [~] P3-T5 Travel compare — voice "bus/train/flight from X to Y on <day>" → web fares (route+date only) or search page; booking by owner; phone check pending
 - [ ] P3-T6 Reorder memory
 - [ ] P3-T7 Order safety review
 - [ ] Phase 3 exit check
