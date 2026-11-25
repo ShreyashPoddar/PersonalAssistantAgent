@@ -45,6 +45,11 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - (old note) Phone tests collide with leftover test tasks from earlier eval runs (titles like "Send English essay to Zoya") —
   clean tagged test tasks (sourceApp with " E" + 4 digits) after evals; eval_chats only removes its own run's tag.
 - adb: background keepalive script in scratchpad (reconnects every 30 s); phone 192.168.1.5:<port>.
+- Later overnight: P4-T1 hub skeleton (hub/server.py + HubClient/HubCard), P3-T5 travel compare (read-only), phone
+  eval grown to 30 scenarios (tools/scenarios.json; eval_chats `business` flag + `sleep` steps), tools/pull_review.py
+  (backup + review since last), DetectionLog 800 entries, ChatMemory (tested), monkey 13k events on emulator: no
+  crash/ANR. v8 + v9 queued on DGX (v9 = v8 + someone-else's-promise categories). Owner to-do: docs/build/OWNER_CHECKS.md.
+- **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
 - **v6 is the phone model** (installed 2026-11-21; v4 kept as `models/local_model_v4.task.bak` on the phone):
