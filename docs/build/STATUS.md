@@ -25,7 +25,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P1-T7 Banking-separation guide (no automation)
 - [~] P1-T8 Instant app launcher — code + tests done; phone timing check pending
 - [ ] P1-T9 SOS
-- [ ] P1-T10 Text sanitiser
+- [x] P1-T10 Text sanitiser
 - [ ] P1-T11 Accessibility perception hardening
 - [ ] P1-T12 Kill switch + Lockdown
 - [ ] P1-T13 Developer-options reminder

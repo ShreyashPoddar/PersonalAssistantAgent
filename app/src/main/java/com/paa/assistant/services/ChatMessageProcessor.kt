@@ -123,7 +123,15 @@ class ChatMessageProcessor @Inject constructor(
      * @param dryRun if given, tasks are collected here instead of scheduled (nothing is logged as scheduled).
      * @return how many tasks were scheduled or asked about.
      */
-    suspend fun process(msg: ChatMessage, dryRun: MutableList<Prepared>? = null): Int {
+    suspend fun process(raw: ChatMessage, dryRun: MutableList<Prepared>? = null): Int {
+        // Untrusted text: hidden characters out, normalised, capped; instruction-like text flagged (P1-T10)
+        val clean = com.paa.assistant.core.security.TextSanitizer.clean(raw.text)
+        val msg = raw.copy(text = clean.text)
+        if (msg.text.isBlank()) return 0
+        if ("instruction_like" in clean.flags) {
+            DetectionLog.add("← " + (msg.chatName ?: msg.app.name.lowercase(Locale.ROOT)), msg.text,
+                "⚠ flagged: reads like instructions to an AI — treated as plain chat, never as a command")
+        }
         // Calls and dry runs are already whole; chat messages wait for the rest of their burst
         if (dryRun != null || msg.app == ChatApp.CALL) return processNow(msg, dryRun)
         // Business accounts, bots and app texts never create tasks (most false tasks in real use came from them)
