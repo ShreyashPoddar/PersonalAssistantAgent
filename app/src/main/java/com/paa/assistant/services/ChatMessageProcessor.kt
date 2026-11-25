@@ -66,11 +66,8 @@ class ChatMessageProcessor @Inject constructor(
     private val bursts = HashMap<String, MutableList<ChatMessage>>()
     private val burstJobs = HashMap<String, kotlinx.coroutines.Job>()
     private val burstScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
-    // A request often arrives in pieces minutes apart ("UPI nahi ho raha" … QR … "jaldi kar, expire ho jayega"). Lines
-    // that gave nothing are carried into the chat's next burst for 30 min, so the pieces are read together.
-    private val carry = HashMap<String, MutableList<Pair<Long, String>>>()
-    // Group: who mentioned the owner, and when — their follow-ups count as addressed to the owner for 30 min
-    private val mentionedBy = HashMap<String, HashMap<String, Long>>()
+    // Requests in pieces (carry-over) and group follow-ups, 30 min each — see ChatMemory
+    private val memory = ChatMemory()
     companion object {
         const val AUTO_SCHEDULE = 0.75f
         /** Details that appear only in LocalLlm's few-shot examples. */
@@ -79,8 +76,6 @@ class ChatMessageProcessor @Inject constructor(
         private const val HISTORY_PER_CHAT = 12
         /** Quiet time after the last message of a burst before it's read. */
         private const val BURST_MS = 20_000L
-        private const val CARRY_MS = 30 * 60_000L
-        private const val CARRY_LINES = 8
         private val DAY_WORDS = Regex("\\b(kal|aaj|parso|parson|tomorrow|today|tonight|raat|subah|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|somvar|mangal|budh|guru|shukra|shani|ravi|next week|\\d{1,2}(st|nd|rd|th)|date)\\b")
         /** Same day said in Hinglish or English. */
         private val DAY_GROUPS = listOf(
@@ -151,31 +146,17 @@ class ChatMessageProcessor @Inject constructor(
                 kotlinx.coroutines.delay(BURST_MS)
                 val batch = synchronized(bursts) { burstJobs.remove(key); bursts.remove(key) } ?: return@launch
                 val lines = batch.map { "${who(it)}: ${it.text.trim()}" }
-                val carried = takeCarry(key)
+                val carried = memory.takeCarry(key)
                 val merged = if (carried.isEmpty()) merge(batch)
                     else merge(batch).copy(text = (carried + lines).joinToString("\n"), burst = true)
                 var reachedModel = false
                 val found = processNow(merged, null, remembered = true, onModel = { reachedModel = true })
-                if (found == 0 && reachedModel) keepCarry(key, carried + lines) else clearCarry(key)
+                if (found == 0 && reachedModel) memory.keepCarry(key, carried + lines) else memory.clearCarry(key)
                 runCatching { historyDao.markRead(key) }
             }
         }
         return 0
     }
-
-    private fun takeCarry(key: String): List<String> = synchronized(carry) {
-        val now = System.currentTimeMillis()
-        carry[key]?.removeAll { now - it.first > CARRY_MS }
-        carry[key].orEmpty().map { it.second }
-    }
-
-    private fun keepCarry(key: String, lines: List<String>) = synchronized(carry) {
-        val now = System.currentTimeMillis()
-        val old = carry[key].orEmpty().associate { it.second to it.first }
-        carry[key] = lines.distinct().takeLast(CARRY_LINES).map { (old[it] ?: now) to it }.toMutableList()
-    }
-
-    private fun clearCarry(key: String) = synchronized(carry) { carry.remove(key) }
 
     /** Senders of "Name: text" lines (or the message's own sender). */
     private fun senders(msg: ChatMessage): List<String> =
@@ -310,12 +291,9 @@ class ChatMessageProcessor @Inject constructor(
 
         val mentioned = UserProfile.isMentioned(text)
         val key = chatKey(msg)
-        val now = System.currentTimeMillis()
         // Follow-ups from someone who mentioned the owner in the last 30 min are addressed to the owner too
-        val followUp = msg.isGroup && synchronized(mentionedBy) {
-            if (mentioned) senders(msg).forEach { mentionedBy.getOrPut(key) { HashMap() }[it] = now }
-            senders(msg).any { s -> mentionedBy[key]?.get(s)?.let { now - it < CARRY_MS } == true }
-        }
+        if (msg.isGroup && mentioned) memory.mentioned(key, senders(msg))
+        val followUp = msg.isGroup && memory.isFollowUp(key, senders(msg))
         // (finishing an open group task is judged from the owner's own replies, not everyone's chatter)
         if (msg.isGroup && !msg.outgoing && !mentioned && !followUp && chatTasks.isEmpty() && !UserProfile.isHackathonGroup(msg.chatName)) {
             log("skipped: group message not addressed to you"); return found
