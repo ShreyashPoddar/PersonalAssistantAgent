@@ -106,6 +106,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
         val p = pendingSend ?: return
         if (System.currentTimeMillis() > p.until) { pendingSend = null; return }
         val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
+        if (root.packageName?.toString() != pkg) return  // never tap anything unless WhatsApp itself is in front (P1-T11)
         val chat = findText(root, "$pkg:id/conversation_contact_name") ?: return
         if (!chat.equals(p.chat, ignoreCase = true) && !chat.contains(p.chat, ignoreCase = true) && !p.chat.contains(chat, ignoreCase = true)) return
         val box = root.findAccessibilityNodeInfosByViewId("$pkg:id/entry")?.firstOrNull()
@@ -128,6 +129,7 @@ class ChatTaskAccessibilityService : AccessibilityService() {
     /** Texts of the message bubbles currently on screen, oldest first (context for "it"/"that"). */
     private fun visibleMessages(pkg: String): List<String> = try {
         rootInActiveWindow?.findAccessibilityNodeInfosByViewId("$pkg:id/message_text")
+            ?.filter { real(it, pkg) }
             ?.mapNotNull { it.text?.toString()?.trim()?.takeIf { t -> t.isNotEmpty() } }
             .orEmpty()
     } catch (e: Exception) {
@@ -147,7 +149,8 @@ class ChatTaskAccessibilityService : AccessibilityService() {
         val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
         // Left the chat: coming back must count as opening it again (messages that came meanwhile are new)
         val chat = findText(root, "$pkg:id/conversation_contact_name") ?: run { if (root.packageName == pkg) openChat = null; return }
-        val bubbles = root.findAccessibilityNodeInfosByViewId("$pkg:id/message_text") ?: return
+        // Hidden, password, tiny or other-app nodes never reach PAA (P1-T11)
+        val bubbles = root.findAccessibilityNodeInfosByViewId("$pkg:id/message_text")?.filter { real(it, pkg) } ?: return
         val firstLook = chat != openChat
         openChat = chat
         // On opening a chat, messages that arrived since it was last open are new to PAA — e.g. a
@@ -180,6 +183,15 @@ class ChatTaskAccessibilityService : AccessibilityService() {
             val msg = ChatMessage(text, ChatApp.WHATSAPP, outgoing = false, chatName = chat, sender = sender, isGroup = isGroup, recentMessages = context)
             scope.launch { processor.process(msg) }
         }
+    }
+
+    private fun real(node: AccessibilityNodeInfo, pkg: String): Boolean {
+        val r = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+        return com.paa.assistant.core.security.NodeFilter.keep(
+            com.paa.assistant.core.security.NodeLite(
+                node.text?.toString(), node.isVisibleToUser, node.isPassword, r.width(), r.height(), node.packageName?.toString()
+            ), pkg
+        )
     }
 
     private fun findText(node: AccessibilityNodeInfo, id: String): String? = try {
