@@ -51,7 +51,9 @@ data class PendingSend(
     val alternatives: List<com.paa.assistant.core.messaging.Contact> = emptyList(),
     /** Who asked: spoken (OWNER_VOICE) or typed (OWNER_UI), and whether the voice was the owner's. */
     val source: com.paa.assistant.core.agent.CommandSource = com.paa.assistant.core.agent.CommandSource.OWNER_VOICE,
-    val voiceVerified: Boolean = false
+    val voiceVerified: Boolean = false,
+    /** Send as an SMS instead of WhatsApp ("sms Riya that …"). */
+    val sms: Boolean = false
 )
 
 /**
@@ -223,6 +225,9 @@ class VoiceOverlayViewModel @Inject constructor(
     }
 
     /** @param localOnly true for text derived from private chats: never escalate to the cloud. */
+    private var smsNext = false
+    private val SMS_COMMAND = Regex("^(?:please\\s+)?(?:sms|send an? sms to|text message)\\s+(.+)$", RegexOption.IGNORE_CASE)
+
     /** How the current command came in (see [PendingSend.source]). */
     private var commandSource = com.paa.assistant.core.agent.CommandSource.OWNER_VOICE
     private var commandVoiceVerified = false
@@ -243,6 +248,26 @@ class VoiceOverlayViewModel @Inject constructor(
             else com.paa.assistant.core.agent.CommandSource.OWNER_UI
         // Spoken within a minute of an "Oyee PA" that matched the owner's voiceprint
         commandVoiceVerified = spoken && now - wake.verifiedWakeAt < 60_000L
+        // "write an email to a@b.com saying …" → Gmail compose, filled in; the owner taps Send (P2-T3)
+        com.paa.assistant.core.skills.EmailSkill.parse(input)?.let { (to, subject, body) ->
+            _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+            viewModelScope.launch {
+                deliverResponse(executor.submit(com.paa.assistant.core.agent.Action.SendEmail(to, subject, body), commandSource,
+                    voiceVerified = commandVoiceVerified).message)
+            }
+            return
+        }
+        // "sms Riya that I'm late" → same preview as WhatsApp, sent as an SMS (P2-T2)
+        SMS_COMMAND.matchEntire(input.trim())?.let { m ->
+            parser.parseSendMessage("message " + m.groupValues[1])?.let { r ->
+                _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
+                smsNext = true
+                val reply = if (r.taskTitle == null) prepareBareMessage(r.recipient ?: "") else prepareMessage(r.recipient ?: "", r.taskTitle)
+                smsNext = false
+                deliverResponse(reply)
+                return
+            }
+        }
         // Money, answered from the phone's own data only — never the cloud (P2-T7/T8)
         com.paa.assistant.core.money.Ledger.parseNote(input)?.let { (person, paise, dir) ->
             _uiState.value = _uiState.value.copy(finalUserText = input, partialText = "", errorMessage = "")
@@ -561,7 +586,7 @@ class VoiceOverlayViewModel @Inject constructor(
         }
         Log.i(tag, "send: confirm popup shown (${matches.size} match(es))")
         _uiState.value = _uiState.value.copy(
-            pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3), commandSource, commandVoiceVerified)
+            pendingSend = PendingSend(matches.first(), text, matches.drop(1).take(3), commandSource, commandVoiceVerified, sms = smsNext)
         )
         return "Send to ${matches.first().name}?\n\"$text\"" + if (matches.size > 1) "\n(Other matches below.)" else ""
     }
@@ -590,10 +615,9 @@ class VoiceOverlayViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(pendingSend = null)
         // The popup already showed the exact text and the owner tapped Send, so it counts as previewed.
         viewModelScope.launch {
-            val result = executor.submit(
-                com.paa.assistant.core.agent.Action.SendMessage("WhatsApp", to.phoneE164, to.name, p.text),
-                p.source, preConfirmed = true, voiceVerified = p.voiceVerified
-            )
+            val action = if (p.sms) com.paa.assistant.core.agent.Action.SendSms(to.phoneE164, to.name, p.text)
+                else com.paa.assistant.core.agent.Action.SendMessage("WhatsApp", to.phoneE164, to.name, p.text)
+            val result = executor.submit(action, p.source, preConfirmed = true, voiceVerified = p.voiceVerified)
             deliverResponse(if (result.ok || result.message.startsWith("I've already")) result.message else "Not sent: ${result.message}")
         }
     }

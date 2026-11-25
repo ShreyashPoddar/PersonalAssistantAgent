@@ -32,9 +32,9 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] Phase 1 exit check
 
 ## Phase 2 — comms + money read-only (`P2_comms_money.md`)
-- [ ] P2-T1 Notification-reply messaging
-- [ ] P2-T2 SMS send + inbox read
-- [ ] P2-T3 Email (share-intent)
+- [~] P2-T1 Notification-reply messaging — WhatsAppSender already replies through the chat notification first; phone check pending
+- [~] P2-T2 SMS send + inbox read — "sms X that …" + bank-SMS inbox; phone check pending
+- [~] P2-T3 Email (share-intent) — "write an email to … saying …" opens Gmail filled in; phone check pending
 - [~] P2-T4 Bank SMS + UPI notification parser (+ DB v7) — code + synthetic tests; phone Test 14 pending
 - [~] P2-T5 Expense categoriser (in DB v7) — code + tests; phone check pending
 - [ ] P2-T6 Statement PDF import (optional)
