@@ -73,5 +73,6 @@ class MainActivity : ComponentActivity() {
         // Microphone foreground services may only start while the app is visible
         com.paa.assistant.services.WakeListenerService.startIfEnabled(this)
         getSystemService(android.app.NotificationManager::class.java).cancel(7310)
+        com.paa.assistant.core.shield.DevOptionsReminder.check(this)  // P1-T13: reminder only, never changes it
     }
 }

@@ -22,13 +22,13 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [x] P1-T4 Executor + SkillRegistry + audit log UI
 - [x] P1-T5 Route existing actions (message/alarm/call/auto-reply) through Executor
 - [x] P1-T6 Owner-controlled screen-reading switch (tile + settings + voice)
-- [ ] P1-T7 Banking-separation guide (no automation)
+- [~] P1-T7 Banking-separation guide (no automation) — guide + in-app dialog done; owner picks profile vs toggle
 - [~] P1-T8 Instant app launcher — code + tests done; phone timing check pending
 - [ ] P1-T9 SOS
 - [x] P1-T10 Text sanitiser
 - [~] P1-T11 Accessibility perception hardening — code + tests done; phone check (WhatsApp reading still works) pending
 - [~] P1-T12 Kill switch + Lockdown — code + tests done; phone check pending
-- [ ] P1-T13 Developer-options reminder
+- [x] P1-T13 Developer-options reminder (mutable while developing)
 - [ ] Phase 1 exit check
 
 ## Phase 2 — comms + money read-only (`P2_comms_money.md`)

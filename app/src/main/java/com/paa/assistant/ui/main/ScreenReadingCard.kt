@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +64,31 @@ fun ScreenReadingCard(surfaceColor: Color, accentColor: Color, textPrimary: Colo
             )
             TextButton(onClick = openSettings, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                 Text("Open Accessibility settings", color = accentColor, fontSize = 12.sp)
+            }
+            var guide by remember { mutableStateOf(false) }
+            TextButton(onClick = { guide = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("How to keep banking separate", color = accentColor, fontSize = 12.sp)
+            }
+            if (guide) androidx.compose.material3.AlertDialog(
+                onDismissRequest = { guide = false },
+                title = { Text("Banking and PAA") },
+                text = {
+                    Text(
+                        "Recommended: keep banking/UPI apps in a second user profile (Settings → Users → Add user) where PAA " +
+                            "isn't installed, and switch to it to bank. Accessibility is per profile, so PAA never touches it.\n\n" +
+                            "Or: before banking, tap the \"PAA screen reading\" tile or say \"banking mode\"; afterwards \"screen " +
+                            "reading on\". PAA never watches which app is open and never hides itself.\n\n" +
+                            "Developer options on → many bank apps refuse to open. UPI PINs are only ever typed by you.",
+                        fontSize = 13.sp
+                    )
+                },
+                confirmButton = { TextButton(onClick = { guide = false }) { Text("OK") } }
+            )
+            var remind by remember { mutableStateOf(!com.paa.assistant.core.shield.DevOptionsReminder.muted(context)) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Remind me when Developer options are on (banks may refuse)", color = textSecondary, fontSize = 11.sp,
+                    modifier = Modifier.weight(1f))
+                Switch(checked = remind, onCheckedChange = { remind = it; com.paa.assistant.core.shield.DevOptionsReminder.setMuted(context, !it) })
             }
         }
     }
