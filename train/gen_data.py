@@ -26,8 +26,8 @@ from paa_format import build_prompt, canonical_target  # noqa: E402
 
 # (category, kinds it fits, weight). kinds: received / sent / burst / call; group allowed per category
 CATEGORIES = [
-    ("a classmate or teacher reminds the owner of an assignment / lab record / file submission with a deadline", "received burst", 3),
-    ("a friend asks the owner for a favour (send notes, bring something, share a file, recharge, book a ticket)", "received burst", 3),
+    ("a classmate or teacher reminds the owner of an assignment / lab record / file submission with a deadline", "received burst", 4),
+    ("a friend asks the owner for a favour (send notes, bring something, share a file, recharge, book a ticket)", "received burst", 5),
     ("the owner promises to do something in their own message (kal bhej dunga, will call you by 5)", "sent burst", 3),
     ("a family member (papa, mummy, bhaiya, didi, dadi) asks the owner to do an errand", "received burst call", 3),
     ("a project group splits work and @mentions or names the owner for a part", "received burst", 2),
@@ -49,7 +49,7 @@ CATEGORIES = [
     ("the deadline or details of one of the owner's OPEN tasks change (4 baje tak bhi chalega, ab monday ko)", "received burst", 2),
     ("a bare acceptance like 'haan kar dunga' / 'ok' with nothing asked before it", "sent", 1),
     ("the owner accepts a request that is in the earlier lines (haan kar dunga, ok will do)", "sent burst", 2),
-    ("a task spread over several short lines: the work in one line, the day in another, the time in a third", "burst", 2),
+    ("a task spread over several short lines: the work in one line, the day in another, the time in a third", "burst", 4),
     ("a phone call where the owner agrees to do something or is asked to do something by a time", "call", 2),
     ("a phone call with only small talk / catching up, nothing to do", "call", 1),
     ("someone else's own plan or reminder that does not involve the owner (main kal jaa raha hu)", "received burst", 2),
@@ -81,6 +81,8 @@ CATEGORIES = [
     ("the owner thinks aloud or asks a question about their own work ('case study aaj submit karu ya kal?', 'kya karna "
      "hai isme') - not a task", "sent burst", 2),
     ("someone sends a file, photo, link or receipt, or says they already sent something, with no ask - not a task", "received burst", 2),
+    ("a short, informal Hinglish request with no deadline ('topic bhej de', 'report bhejo', 'certificate send krna', "
+     "'kindly give me a report', 'send me the details') - a task even without a time", "received burst", 4),
     ("a question to the owner that only asks for information or opinion ('kahan busy ho?', 'pehle kuch karna padta hai "
      "kya?', 'game ke liye aa raha?') - not a task", "received burst", 3),
 ]
