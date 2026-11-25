@@ -276,6 +276,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item { Spacer(Modifier.height(4.dp)) }
+            item { SafetyCard(surfaceColor, textPrimary, textSecondary) }
 
             // ── AI RESPONSE BANNER ────────────────────────────────────────────
             if (aiResponse != null) {

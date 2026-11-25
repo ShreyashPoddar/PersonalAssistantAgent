@@ -156,6 +156,17 @@
         </service>
 
         <service
+            android:name=".core.agent.LockdownTileService"
+            android:exported="true"
+            android:label="PAA Lockdown"
+            android:icon="@drawable/ic_mic"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".core.shield.ScreenReadingTileService"
             android:exported="true"
             android:label="PAA screen reading"
