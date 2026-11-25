@@ -42,6 +42,14 @@ class BankSmsParserTest {
         assertEquals("UPI", x.bank)
     }
 
+    @Test fun upiAppWordings() {
+        val a = p("Payment of ₹245 to Swiggy successful", "com.phonepe.app", "NOTIF")!!
+        assertEquals("DEBIT", a.direction); assertEquals(24500L, a.amountPaise); assertEquals("Swiggy", a.counterparty)
+        val b = p("Received ₹500 from Rahul Mehta", "com.google.android.apps.nbu.paisa.user", "NOTIF")!!
+        assertEquals("CREDIT", b.direction); assertEquals("Rahul Mehta", b.counterparty)
+        assertNull(p("You won ₹10 cashback on your payment", "com.google.android.apps.nbu.paisa.user", "NOTIF"))
+    }
+
     @Test fun notTransactions() {
         assertNull(p("123456 is your OTP for a transaction of INR 2,000.00 at AMAZON. Do not share."))
         assertNull(p("Get up to Rs.50,000 pre-approved personal loan! Apply now"))

@@ -26,7 +26,8 @@ object BankSmsParser {
     )
 
     private val AMOUNT = Regex("(?:INR|Rs\\.?|₹)\\s?([\\d,]+(?:\\.\\d{1,2})?)", RegexOption.IGNORE_CASE)
-    private val DEBIT = Regex("\\b(debited|spent|withdrawn|paid|sent|deducted|purchase|dr\\.?)\\b", RegexOption.IGNORE_CASE)
+    // "Payment of ₹245 to Swiggy successful" (UPI apps) counts as a debit; "payment due/request" is filtered by NOT_DONE
+    private val DEBIT = Regex("\\b(debited|spent|withdrawn|paid|sent|deducted|purchase|dr\\.?|payment (of|to)|transferred)\\b", RegexOption.IGNORE_CASE)
     private val CREDIT = Regex("\\b(credited|received|deposited|refunded|cr\\.?)\\b", RegexOption.IGNORE_CASE)
     private val NOT_DONE = Regex(
         "\\b(otp|one time password|declined|failed|unsuccessful|reversed|will be debited|request(ed)? (money|payment)|has requested|" +
@@ -42,7 +43,7 @@ object BankSmsParser {
     private val VPA = Regex("\\b([\\w.\\-]{2,}@[a-zA-Z]{2,})\\b")
     private val COUNTERPARTY = Regex(
         "\\b(?:to|at|from|by|towards|info:?|trf to|paid to|sent to|received from)\\s+(?:VPA\\s+)?([A-Za-z0-9][A-Za-z0-9 &.'*_-]{1,40}?)" +
-            "(?=\\s+(?:on|via|using|for|ref|upi|avl|avail|bal|-|\\.|\\(|\\d{1,2}[-/])|[.,;(]|$)",
+            "(?=\\s+(?:on|via|using|for|ref|upi|avl|avail|bal|successful|successfully|is|was|completed|done|-|\\.|\\(|\\d{1,2}[-/])|[.,;(!]|$)",
         RegexOption.IGNORE_CASE
     )
 
