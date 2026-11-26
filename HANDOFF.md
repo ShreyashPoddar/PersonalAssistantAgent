@@ -61,6 +61,10 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   Queued `chain-1b-v9mix` (v9 + v7b + v8 train sets via new `--extra-data`, 2 epochs) after data-v9, next to plain
   v9. Score both: `bash ../PAA-private/score_models.sh v9 v9mix` (if it exits 1 with no lines, run the wsl line
   without the grep to see the error; a plain rerun worked on 2026-11-26).
+- **v9 on the private set: 53/64 — best so far** (v7b 51, v9mix 48, v8 41). requests 15/18 (v7b 12), pieces 2/3,
+  job posts 5/5; but 2 titles name the owner (v7b 0) and someone else's promise still 0/2. Mixing older data hurt.
+  Next: phone 30-scenario eval of export-1b-v9 (needs ≥ 29/30, ≤ 1.2 GB) → swap in, v7b kept as .bak. Phone was off
+  wireless debugging on 2026-11-27 — needs a fresh IP:port + pairing code from the owner.
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
