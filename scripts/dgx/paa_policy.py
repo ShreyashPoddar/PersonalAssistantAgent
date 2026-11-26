@@ -88,6 +88,11 @@ def _share(d: dict | None, default: dict) -> tuple[int, int]:
     return lo, max(lo, hi)
 
 
+def _any_idle(d) -> bool:
+    """paa.any_idle: PAA's guaranteed cards (up to paa min) may take even the card kept idle for others (owner 2026-11-26)."""
+    return bool(isinstance(d, dict) and d.get("any_idle"))
+
+
 def active_rule(now: datetime, limits: dict) -> dict:
     base = _n(limits.get("max_gpus"), 2)
     floor = _n(limits.get("min_gpus"), base)
@@ -97,16 +102,18 @@ def active_rule(now: datetime, limits: dict) -> dict:
             cap = _n(w.get("max_gpus"), base)
             pmin, pmax = _share(w.get("paa"), PAA_NIGHT)
             return {"mode": str(w.get("name") or f"window{i + 1}"), "cap": cap, "keep_free": _n(w.get("keep_free"), 0),
-                    "floor": min(_n(w.get("min_gpus"), floor), cap), "hold": hold, "paa_min": pmin, "paa_max": pmax}
+                    "floor": min(_n(w.get("min_gpus"), floor), cap), "hold": hold, "paa_min": pmin, "paa_max": pmax,
+                    "paa_any_idle": _any_idle(w.get("paa"))}
     night = limits.get("night") or {}
     if night and in_window(now, {"start": "21:00", "end": "07:00", **night}):
         cap = _n(night.get("max_gpus"), ALL)
         pmin, pmax = _share(night.get("paa"), PAA_NIGHT)
         return {"mode": "night", "cap": cap, "keep_free": _n(night.get("keep_free"), 1),
-                "floor": min(_n(night.get("min_gpus"), floor), cap), "hold": hold, "paa_min": pmin, "paa_max": pmax}
+                "floor": min(_n(night.get("min_gpus"), floor), cap), "hold": hold, "paa_min": pmin, "paa_max": pmax,
+                "paa_any_idle": _any_idle(night.get("paa"))}
     pmin, pmax = _share(limits.get("paa"), PAA_DAY)
     return {"mode": "day", "cap": base, "keep_free": _n(limits.get("keep_free"), 0), "floor": min(floor, base),
-            "hold": hold, "paa_min": pmin, "paa_max": pmax}
+            "hold": hold, "paa_min": pmin, "paa_max": pmax, "paa_any_idle": _any_idle(limits.get("paa"))}
 
 
 def paa_reserved(rule: dict, using: int, wanting: int) -> int:
@@ -130,6 +137,8 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
     using = sum(len(j.cards) for j in active)
     order = sorted(active, key=lambda j: (not j.holding, -j.started))   # holding first, then newest
     preempt: list[str] = []
+    # owner's paa.any_idle: the guaranteed cards may be any idle card, even the one kept free for others
+    guaranteed = min(idle, max(0, pmin - using)) if rule.get("paa_any_idle") else 0
 
     if not localai_honours:   # LocalAI doesn't know about PAA yet: PAA only takes what is left over
         to_floor = max(0, floor - used)
@@ -137,7 +146,7 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
             allow = min(idle, to_floor + max(0, idle - to_floor - keep_free), max(0, cap - used))
         else:
             allow = min(idle, max(0, cap - used))
-        allow = min(allow, max(0, pmax - using))
+        allow = max(min(allow, max(0, pmax - using)), guaranteed)
         excess = used - pausing - cap
         if excess > 0:
             for j in order:
@@ -145,7 +154,7 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
                     break
                 preempt.append(j.id)
                 excess -= max(1, len(j.cards))
-        elif keep_free and idle < keep_free and used - pausing > floor and order and not pausing:
+        elif keep_free and idle < keep_free and used - pausing > floor and order and not pausing                 and not (rule.get("paa_any_idle") and using <= pmin):
             preempt.append(order[0].id)
         allow = 0 if rule.get("hold") else allow
         return allow, _hand_over(rule, order, preempt, allow, wanting, pausing)
@@ -153,7 +162,7 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
     # LocalAI reserves PAA's share: PAA takes its guaranteed cards even when the total is full (LocalAI pauses its
     # newest run to make room), extra cards only when the total has room; never the card(s) kept idle for others.
     room = max(cap - used, pmin - using)
-    allow = max(0, min(max(0, idle - keep_free), pmax - using, room))
+    allow = max(0, min(max(0, idle - keep_free), pmax - using, room), guaranteed)
     if rule.get("hold"):
         allow = 0
     holding = [j for j in order if j.holding]

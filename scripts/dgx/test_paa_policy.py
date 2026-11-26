@@ -61,6 +61,27 @@ class BeforeLocalAIReserves(unittest.TestCase):
         self.assertEqual(decide(DAY, mem({0, 1, 6, 7}), {0, 1, 6, 7}, jobs), (0, ["other"]))
 
 
+class AnyIdleShare(unittest.TestCase):
+    """Owner 2026-11-26: PAA may always use 2 cards, even the one kept idle for others (paa: {min: 2, any_idle: true})."""
+    R = {"mode": "day", "cap": 4, "keep_free": 1, "floor": 2, "hold": False, "paa_min": 2, "paa_max": 4, "paa_any_idle": True}
+
+    def test_two_cards_even_if_that_leaves_none_idle(self):
+        # others on 0-5, only 6,7 idle: PAA may take both (keep_free would have left 1)
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 4, 5}), set(), [], wanting=2)[0], 2)
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 4, 5}), set(), [], wanting=2, localai_honours=True)[0], 2)
+
+    def test_second_card_is_not_paused_for_keep_free(self):
+        jobs = [Job("a", [6], 100, False), Job("b", [7], 200, False)]
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 4, 5, 6, 7}), {6, 7}, jobs), (0, []))
+
+    def test_beyond_two_still_keeps_one_idle(self):
+        jobs = [Job("a", [6], 100, False), Job("b", [7], 200, False)]
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 6, 7}), {6, 7}, jobs, wanting=1)[0], 1)   # 4,5 idle -> 1 more
+
+    def test_off_by_default(self):
+        self.assertFalse(active_rule(datetime(2026, 11, 26, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")), {"max_gpus": 4})["paa_any_idle"])
+
+
 class LocalAIReservesShare(unittest.TestCase):
     """LocalAI honours PAA's share: PAA's guaranteed card even when LocalAI fills the total."""
 
