@@ -66,4 +66,4 @@ jobs:
   - {id: export-1b-v9, step: export, ref: b8d1dce74d27, after: train-1b-v9, args: "--size 1b --tag v9"}
   - {id: chain-1b-v9mix, step: train, ref: 1dff3ddec38d, out: train-1b-v9mix, after: data-v9, args: "--base google/gemma-3-1b-it --extra-data data-v7b,data-v8 --epochs 2 --then-eval eval-1b-v9mix"}
   - {id: export-1b-v9mix, step: export, ref: 1dff3ddec38d, after: train-1b-v9mix, args: "--size 1b --tag v9mix"}
-control: {status: 21, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3, data-v7], stop: [chain-270m-v4, chain-270m-v5, chain-1b-v7, export-1b-v7]}
+control: {status: 22, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3, data-v7], stop: [chain-270m-v4, chain-270m-v5, chain-1b-v7, export-1b-v7]}
