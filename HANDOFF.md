@@ -55,6 +55,12 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - Private set (64 cases): **v7b 51/64**, v6 46/64. v7b weak: someone else's promise 0/2, requests 12/18, pieces 1/3.
   Next: when export-1b-v8 / -v9 finish → `bash ../PAA-private/score_models.sh v8 v9` (downloads + scores vs v7b);
   ship the best to the phone only if it also holds 29/30 on the phone eval and ≤ 1.2 GB.
+- **v8 on the private set: 41/64 — not shipped** (synthetic was better: .952 has_task, 11/12). Lost all 5 eligible job
+  posts ("announcement for 2027 and 2028 batches, not a task"), 5 titles name the owner, +5 false tasks. v8 data
+  labels look fine (job posts incl. 2028 → tasks; same split as v7b), so likely training variance / category mix.
+  Queued `chain-1b-v9mix` (v9 + v7b + v8 train sets via new `--extra-data`, 2 epochs) after data-v9, next to plain
+  v9. Score both: `bash ../PAA-private/score_models.sh v9 v9mix` (if it exits 1 with no lines, run the wsl line
+  without the grep to see the error; a plain rerun worked on 2026-11-26).
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
