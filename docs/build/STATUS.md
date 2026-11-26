@@ -63,7 +63,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] Phase 4 exit check
 
 ## Phase 5 — on-device intelligence (`P5_intelligence.md`)
-- [ ] P5-T1 Ship task model to phone
+- [~] P5-T1 Ship task model to phone — v7b on the phone (private set 46/57, phone eval 14/15 clean, 1.07 GB); v8/v9 training
 - [ ] P5-T2 Learned task gate
 - [ ] P5-T3 Intent + slots model
 - [ ] P5-T4 Expense classifier model (optional)
