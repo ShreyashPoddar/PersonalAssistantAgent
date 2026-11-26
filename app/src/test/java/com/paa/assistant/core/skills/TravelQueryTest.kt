@@ -27,6 +27,8 @@ class TravelQueryTest {
     @Test fun notTravel() {
         assertNull(TravelQuery.parse("remind me to book the bus tickets"))
         assertNull(TravelQuery.parse("message Riya that the bus is late"))
+        assertNull(TravelQuery.parse("kal bus from Chennai to Hosur book karna yaad dilana"))
+        assertNull(TravelQuery.parse("remind me to check the train from Chennai to Delhi"))
     }
 
     @Test fun questionHasNoPersonalData() {

@@ -35,6 +35,8 @@ data class TravelQuery(val modes: List<String>, val from: String, val to: String
         fun parse(said: String): TravelQuery? {
             val s = said.trim().trimEnd('.', '?', '!').replace(Regex("^(oyee? pa|hey pa|pa)[, ]+", RegexOption.IGNORE_CASE), "")
             val lower = s.lowercase(Locale.ROOT)
+            // "remind me to book the bus from X to Y" is a reminder, not a fare search
+            if (Regex("\\b(remind|reminder|yaad|alarm|book karna|book kar dena)\\b").containsMatchIn(lower)) return null
             val prefs = PREFS.filter { Regex("\\b$it\\b").containsMatchIn(lower) }
             ROUTE.find(s)?.let { m ->
                 val modes = listOfNotNull(MODE[m.groupValues[1].lowercase()], m.groupValues[2].takeIf { it.isNotEmpty() }?.lowercase()).distinct()
