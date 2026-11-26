@@ -553,10 +553,10 @@
  },
  {
   "id": "plain_request_no_deadline",
-  "chat": "Suryansh",
+  "chat": "Tanmay",
   "steps": [
    {
-    "text": "Bhai topic bhej de VLSI project wala"
+    "text": "Bhai DSP ke notes bhej de"
    },
    {
     "wait": "result"
@@ -565,7 +565,7 @@
   "expect": [
    {
     "contains": "📌",
-    "keyword": "topic"
+    "keyword": "notes"
    }
   ]
  },
@@ -607,10 +607,10 @@
  },
  {
   "id": "today_deadline",
-  "chat": "Harshil",
+  "chat": "Kunal",
   "steps": [
    {
-    "text": "bhai aaj confirm kar dena"
+    "text": "bhai aaj hostel form confirm kar dena"
    },
    {
     "wait": "result"
@@ -619,7 +619,7 @@
   "expect": [
    {
     "contains": "📌",
-    "keyword": "confirm",
+    "keyword": "form",
     "due_day_offset": 0
    }
   ]
