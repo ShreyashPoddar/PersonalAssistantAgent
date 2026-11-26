@@ -182,6 +182,13 @@ def decide(rule: dict, mem: dict[int, float], ours: set[int], paa: list[Job], wa
         preempt.append(j.id)
         excess -= max(1, len(j.cards))
         give -= max(1, len(j.cards))
+    # paa.any_idle: a 3rd/4th card is kept only while another card stays idle; when the idle one is taken, give back
+    # the newest card above the guaranteed ones (one per poll; it saves and resumes)
+    if rule.get("paa_any_idle") and keep_free and idle < keep_free and not pausing and give > 0:
+        for j in order:
+            if j.id not in preempt:
+                preempt.append(j.id)
+                break
     return allow, _hand_over(rule, order, preempt, allow, wanting, pausing)
 
 

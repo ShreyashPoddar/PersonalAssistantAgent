@@ -78,6 +78,22 @@ class AnyIdleShare(unittest.TestCase):
         jobs = [Job("a", [6], 100, False), Job("b", [7], 200, False)]
         self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 6, 7}), {6, 7}, jobs, wanting=1)[0], 1)   # 4,5 idle -> 1 more
 
+    def test_idle_card_taken_gives_back_newest_above_two(self):
+        jobs = [Job("a", [5], 100, False), Job("b", [6], 200, False), Job("c", [7], 300, False)]
+        busy = mem({0, 1, 2, 3, 4, 5, 6, 7})   # someone filled the last idle card
+        for honours in (False, True):
+            self.assertEqual(decide(self.R, busy, {5, 6, 7}, jobs, localai_honours=honours), (0, ["c"]))
+
+    def test_never_below_two(self):
+        jobs = [Job("a", [6], 100, False), Job("b", [7], 200, False)]
+        for honours in (False, True):
+            self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 4, 5, 6, 7}), {6, 7}, jobs, localai_honours=honours), (0, []))
+
+    def test_fourth_card_needs_another_idle(self):
+        jobs = [Job("a", [5], 100, False), Job("b", [6], 200, False), Job("c", [7], 300, False)]
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 3, 5, 6, 7}), {5, 6, 7}, jobs, wanting=1)[0], 0)   # only 4 idle
+        self.assertEqual(decide(self.R, mem({0, 1, 2, 5, 6, 7}), {5, 6, 7}, jobs, wanting=1)[0], 1)      # 3,4 idle
+
     def test_off_by_default(self):
         self.assertFalse(active_rule(datetime(2026, 11, 26, 12, 0, tzinfo=ZoneInfo("Asia/Kolkata")), {"max_gpus": 4})["paa_any_idle"])
 
