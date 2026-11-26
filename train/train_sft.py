@@ -107,6 +107,7 @@ def main():
     ap.add_argument("--micro", type=int, default=8)
     ap.add_argument("--max-len", type=int, default=1024)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--extra-data", default="", help="comma list of older data dirs (e.g. data-v7b,data-v8) whose train.jsonl is added")
     ap.add_argument("--then-eval", default="", help="then run eval_model.py into artifacts/<name>")
     ap.add_argument("--then-train", default="", help="then train BASE,OUT[,EVAL] on the same card")
     ap.add_argument("--hold", action="store_true", help="at the end keep the card reserved until control.stop")
@@ -130,7 +131,12 @@ def main():
     templ = tok.apply_chat_template([{"role": "user", "content": probe}], tokenize=False, add_generation_prompt=True)
     assert templ == tok.bos_token + wrap(probe), f"chat template differs from paa_format.wrap:\n{templ!r}"
 
-    train, val = Data(load(data / "train.jsonl"), tok, a.max_len), Data(load(data / "val.jsonl"), tok, a.max_len)
+    rows = load(data / "train.jsonl")
+    for name in filter(None, a.extra_data.split(",")):   # older rounds' train sets, next to this one (val/test stay this round's)
+        extra = data.parent / name / "train.jsonl"
+        assert extra.exists(), f"--extra-data: no {extra}"
+        rows += load(extra)
+    train, val = Data(rows, tok, a.max_len), Data(load(data / "val.jsonl"), tok, a.max_len)
     print(f"train {len(train)}  val {len(val)}", flush=True)
     if PAUSE.is_set():
         paused(0)
@@ -159,7 +165,7 @@ def main():
         paused(trainer.state.global_step)
     ev = trainer.evaluate()
     trainer.save_model(str(out / "model")); tok.save_pretrained(str(out / "model"))
-    summary = {"base": a.base, "data": str(data.resolve()), "train": len(train), "val": len(val), "train_loss": res.training_loss,
+    summary = {"base": a.base, "data": str(data.resolve()), "extra_data": a.extra_data, "train": len(train), "val": len(val), "train_loss": res.training_loss,
                "eval_loss": ev.get("eval_loss"), "steps": res.global_step}
     (out / "train_summary.json").write_text(json.dumps(summary, indent=1))
     print("summary", json.dumps(summary), flush=True)
