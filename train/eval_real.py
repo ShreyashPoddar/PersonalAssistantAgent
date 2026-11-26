@@ -80,7 +80,8 @@ def main():
         for c, o in zip(cases, outs):
             r = score(c, first_json(o))
             rows.append({**r, "id": c["id"], "cat": c["cat"], "output": o})
-        name = Path(m.rstrip("/")).name or m
+        mp = Path(m.rstrip("/"))
+        name = mp.parent.name if mp.name == "model" else (mp.name or m)  # .../train-1b-v7b/model → train-1b-v7b
         summary = summarize(rows)
         table[name] = summary
         (out / f"{name}.json").write_text(json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=1),
