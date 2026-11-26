@@ -49,6 +49,9 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   eval grown to 30 scenarios (tools/scenarios.json; eval_chats `business` flag + `sleep` steps), tools/pull_review.py
   (backup + review since last), DetectionLog 800 entries, ChatMemory (tested), monkey 13k events on emulator: no
   crash/ANR. v8 + v9 queued on DGX (v9 = v8 + someone-else's-promise categories). Owner to-do: docs/build/OWNER_CHECKS.md.
+- **v7b on the 30-scenario phone eval: 29/30** (only someone_elses_promise fails → v9). Run it with the mdns serial
+  `adb-10BDB80A07000G0-I8njvu._adb-tls-connect._tcp` — the IP:port changes when wireless debugging restarts
+  (it did at 04:13 mid-run); keepalive2.sh in scratchpad uses that name.
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
