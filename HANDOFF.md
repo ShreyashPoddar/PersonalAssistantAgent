@@ -52,6 +52,9 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - **v7b on the 30-scenario phone eval: 29/30** (only someone_elses_promise fails → v9). Run it with the mdns serial
   `adb-10BDB80A07000G0-I8njvu._adb-tls-connect._tcp` — the IP:port changes when wireless debugging restarts
   (it did at 04:13 mid-run); keepalive2.sh in scratchpad uses that name.
+- Private set (64 cases): **v7b 51/64**, v6 46/64. v7b weak: someone else's promise 0/2, requests 12/18, pieces 1/3.
+  Next: when export-1b-v8 / -v9 finish → `bash ../PAA-private/score_models.sh v8 v9` (downloads + scores vs v7b);
+  ship the best to the phone only if it also holds 29/30 on the phone eval and ≤ 1.2 GB.
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
