@@ -75,6 +75,19 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   (v9 34): requests 11/18, pieces 0/3. DGX scenarios 21/25 (someone_elses_promise passes). Not phone-tested.
   Queued `chain-1b-v10mix` = v10 + data-v9 with the same filter applied in train_sft (15707 → 13979 rows), 2 epochs.
   Score: `bash ../PAA-private/score_models.sh v10mix`; candidate needs > 53/64 or v9's recall without its faults.
+- **Laptop model path (2026-11-28).** Owner: run a bigger model on the laptop GPU (RTX 5070 Ti, 12 GB, 32 GB RAM).
+  llama.cpp b12373 (CUDA 13.5) + google/gemma-4-12B-it-qat-q4_0-gguf in %USERPROFILE%\paa-llm (outside the repo).
+  Start: `powershell -File hub\start_laptop.ps1 [-Lora <paa-lora.gguf>]` (server on 127.0.0.1:8081 only, then hub).
+  MUST run with --jinja --reasoning-budget 0 + enable_thinking false: with thinking on, 47/64 answers were empty.
+  **Gemma 4 12B untrained, teacher rules as system prompt: 51/64** (= v7b), promise 2/2, owner-named 7/8, 0 titles
+  with the owner's name, but job posts 1/5, 8 false tasks; median 2.6 s/message (max 22 s).
+  Phone: LocalLlm.extractTasks tries the paired+enabled hub first (POST /extract), falls back to the phone model,
+  skips the hub 2 min after a failure. Not yet installed on the phone / not yet paired.
+  DGX: `lora-12b-v10` queued (train_sft --lora → train_lora.py: Gemma 4 12B LoRA r16 on data-v10 + cleaned v9, 2 ep,
+  own chat format, adapter → paa-lora.gguf). Score with the hub's student mode:
+  `eval_real.py --server ... --prompt student` after starting llama-server with --lora.
+  WhatsApp Desktop (WebView2) exposes its chat list and open chat through UI Automation (~400 elements); classes
+  are obfuscated CSS, so a reader must use roles/structure. Reader not built yet: opening a chat marks it read.
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
