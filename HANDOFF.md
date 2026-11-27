@@ -208,3 +208,6 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   GET /health, GET /messages every 30 s, POST /extract). Tagged test (E9001 phone model, E9002 laptop Gemma 4 12B)
   gave "Send lab record to Kunal · due Sun 29 Nov 9:00 AM" from both; second deduped. Test data removed (43 tasks).
   Phone Tailscale must be ON (it was off at first: no VPN network, ping failed).
+- **v10mix private set: 48/64** (v9 53, v7b 51, v10 49): job posts 5/5 but 5 owner-named titles, 9 false tasks,
+  requests 11/18. Not shipped. The 1B rounds swing 41–53 on 64 cases (noise ±3); next effort goes to the laptop 12B.
+  Scoring now runs on the laptop GPU next to llama-server: PAA-private/run_eval_real_gpu.sh (nice 19, no freeze).
