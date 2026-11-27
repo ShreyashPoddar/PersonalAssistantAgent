@@ -65,6 +65,12 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   job posts 5/5; but 2 titles name the owner (v7b 0) and someone else's promise still 0/2. Mixing older data hurt.
   Next: phone 30-scenario eval of export-1b-v9 (needs ≥ 29/30, ≤ 1.2 GB) → swap in, v7b kept as .bak. Phone was off
   wireless debugging on 2026-11-27 — needs a fresh IP:port + pairing code from the owner.
+- **v9 on the phone: 27/30 → not shipped**, v7b restored (v9 kept as local_model_v9.task.bak; peak PSS 1.12 GB).
+  Fails: someone_elses_promise, group_followup ("Do something"), + 1 cut from the log. Backup before: PAA-private/
+  backup-2026-11-27.json; test leftovers checked (0 tagged tasks, chat lines removed).
+- Root cause of "someone else's promise": the teacher's only check is self-agreement, and in no-task categories it
+  consistently labels tasks (data-v9: 288/385 promises, 537/539 random-group hackathon @mentions, 172/645 company
+  accounts). gen_data v10 drops those ("category says no task") + explicit rule. **v10 queued** (data → chain → export).
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
