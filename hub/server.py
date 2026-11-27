@@ -53,6 +53,21 @@ def cert_sha256(cert: Path) -> str:
     return hashlib.sha256(der).hexdigest()
 
 
+def tailscale_ip() -> str | None:
+    """This machine's Tailscale IPv4 (100.64.0.0/10), or None when Tailscale is not installed / not connected."""
+    import ipaddress
+    import shutil
+    exe = shutil.which("tailscale") or next((p for p in (r"C:\Program Files\Tailscale\tailscale.exe",) if Path(p).exists()), None)
+    if not exe:
+        return None
+    try:
+        out = subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=10).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    cgnat = ipaddress.ip_network("100.64.0.0/10")
+    return next((ip for ip in out if ipaddress.ip_address(ip) in cgnat), None)
+
+
 def lan_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -164,6 +179,8 @@ def main():
     ap.add_argument("--state", default=str(Path.home() / ".paa-hub"))
     ap.add_argument("--llm", help="llama.cpp server on this machine for /extract, e.g. http://127.0.0.1:8081")
     ap.add_argument("--llm-prompt", choices=["rules", "student"], default="rules")
+    ap.add_argument("--network", choices=["tailscale", "lan"], default="tailscale",
+                    help="tailscale (default): reachable only from your own Tailscale devices, at home or away")
     ap.add_argument("--wa", action="store_true", help="read WhatsApp Desktop's chat list (read-only) for the phone")
     a = ap.parse_args()
     if a.llm and not a.llm.startswith(("http://127.0.0.1", "http://localhost")):
@@ -176,13 +193,20 @@ def main():
         inbox = Inbox()
         threading.Thread(target=Reader(inbox).run_forever, daemon=True).start()
         print("WhatsApp Desktop reader on (chat list previews only; never opens a chat)")
-    payload = pairing_payload(lan_ip(), a.port, token, cert_sha256(cert))
+    if a.network == "tailscale":
+        host = tailscale_ip()
+        if not host:
+            sys.exit("Tailscale is not connected on this laptop (start it, or use --network lan)")
+        bind = host   # listen ONLY on the Tailscale address: other devices on the Wi-Fi can't even connect
+    else:
+        host, bind = lan_ip(), "0.0.0.0"
+    payload = pairing_payload(host, a.port, token, cert_sha256(cert))
     print("Pairing payload (paste into PAA → Hub, or scan it as a QR):")
     print(json.dumps(payload))
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(cert, key)
-    srv = ThreadingHTTPServer(("0.0.0.0", a.port), make_handler(token, time.time(), a.llm, a.llm_prompt, inbox=inbox))
+    srv = ThreadingHTTPServer((bind, a.port), make_handler(token, time.time(), a.llm, a.llm_prompt, inbox=inbox))
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     print(f"hub listening on https://{payload['host']}:{a.port}", flush=True)
     srv.serve_forever()

@@ -1,6 +1,6 @@
 # Start PAA's laptop model + hub (Windows). Everything stays on this laptop and your home network.
 #   powershell -ExecutionPolicy Bypass -File hub\start_laptop.ps1 [-Lora <adapter.gguf>]
-# Model server: llama.cpp on 127.0.0.1:8081 only (not reachable from the network). Hub: HTTPS on :8765 with the
+# Model server: llama.cpp on 127.0.0.1:8081 only (not reachable from the network). Hub: HTTPS on <tailscale ip>:8765 with the
 # pairing token + pinned certificate; it is the only thing the phone talks to.
 param(
     [string]$LlamaDir = "$env:USERPROFILE\paa-llm\llama.cpp",
