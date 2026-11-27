@@ -16,6 +16,7 @@ import dataclasses
 import json
 import math
 import signal
+import os
 import sys
 import threading
 from pathlib import Path
@@ -97,6 +98,8 @@ def collate(pad_id):
 
 
 def main():
+    if "--lora" in sys.argv:   # a bigger model for the laptop: LoRA in its own chat format (train_lora.py)
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).parent / "train_lora.py"), *sys.argv[1:]])
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="google/gemma-3-1b-it")
     ap.add_argument("--data", required=True)

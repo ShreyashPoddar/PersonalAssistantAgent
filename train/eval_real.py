@@ -2,6 +2,8 @@
 the DGX). Run on the laptop:
 
     python train/eval_real.py --set ../PAA-private/realset-v1.jsonl --model <hf dir> [--model <hf dir> ...] --out <dir>
+    python train/eval_real.py --set ... --server http://127.0.0.1:8081 --name gemma4-12b --out <dir>   # llama.cpp server
+         (--prompt rules: the teacher's rules as system prompt, for an untrained model; student: the trained prompt)
 
 Each case: {"id", "now", "msg", "ctx", "expect": [[kw, ...], ...] (one inner list per expected task; a task matches
 when its title contains every kw), "cat"}. Reports, per model: cases passed, task recall, false tasks (any task on a
@@ -54,12 +56,67 @@ def summarize(rows):
     return s
 
 
+VERDICT_SCHEMA = {"type": "object", "required": ["tasks", "reason", "done", "update"], "properties": {
+    "tasks": {"type": "array", "items": {"type": "object", "required": ["title", "when", "priority", "registration", "confidence", "reason"],
+              "properties": {"title": {"type": "string"}, "when": {"type": ["string", "null"]}, "priority": {"type": "integer"},
+                             "registration": {"type": "boolean"}, "confidence": {"type": "number"}, "reason": {"type": "string"}}}},
+    "reason": {"type": "string"}, "done": {"type": "array", "items": {"type": "integer"}},
+    "update": {"type": "array", "items": {"type": "object", "required": ["n"], "properties": {
+        "n": {"type": "integer"}, "when": {"type": ["string", "null"]}, "title": {"type": ["string", "null"]}}}}}}
+
+
+def server_messages(prompt: str, mode: str) -> list:
+    if mode == "student":
+        return [{"role": "user", "content": prompt}]
+    from gen_data import RULES
+    names = " or ".join(n.capitalize() for n in OWNERS)
+    return [{"role": "system", "content": RULES.format(names=names, year=GRAD_YEAR)}, {"role": "user", "content": prompt + "\nJSON:"}]
+
+
+def ask_server(url: str, messages: list) -> tuple:
+    """One chat completion from a local llama.cpp server, output forced to the verdict JSON schema."""
+    import time
+    import urllib.request
+    body = json.dumps({"messages": messages, "temperature": 0, "max_tokens": 500, "chat_template_kwargs": {"enable_thinking": False},
+                       "response_format": {"type": "json_schema", "json_schema": {"name": "verdict", "schema": VERDICT_SCHEMA}}}).encode()
+    t0 = time.time()
+    req = urllib.request.Request(url.rstrip("/") + "/v1/chat/completions", body, {"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=300) as r:
+        out = json.loads(r.read())["choices"][0]["message"]["content"]
+    return out, time.time() - t0
+
+
+def run_server(a, cases, prompts, out: Path):
+    rows, secs = [], []
+    for c, p in zip(cases, prompts):
+        o, dt = ask_server(a.server, server_messages(p, a.prompt))
+        secs.append(dt)
+        rows.append({**score(c, first_json(o)), "id": c["id"], "cat": c["cat"], "output": o, "seconds": round(dt, 2)})
+    summary = summarize(rows)
+    secs.sort()
+    summary["seconds_median"] = round(secs[len(secs) // 2], 2)
+    summary["seconds_max"] = round(secs[-1], 2)
+    (out / f"{a.name}.json").write_text(json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=1),
+                                        encoding="utf-8")
+    print(a.name, json.dumps(summary), flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", required=True)
-    ap.add_argument("--model", action="append", required=True)
+    ap.add_argument("--model", action="append")
+    ap.add_argument("--server", help="a llama.cpp server URL instead of --model (laptop only: localhost)")
+    ap.add_argument("--name", default="server")
+    ap.add_argument("--prompt", choices=["rules", "student"], default="rules")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if a.server:
+        cases = [json.loads(l) for l in Path(a.set).open(encoding="utf-8") if l.strip()]
+        prompts = [build_prompt(c["msg"], c["ctx"], datetime.fromisoformat(c["now"]), OWNERS, GRAD_YEAR) for c in cases]
+        out = Path(a.out)
+        out.mkdir(parents=True, exist_ok=True)
+        return run_server(a, cases, prompts, out)
+    assert a.model, "--model or --server"
     import torch
     import transformers
     from transformers import AutoModelForCausalLM, AutoTokenizer

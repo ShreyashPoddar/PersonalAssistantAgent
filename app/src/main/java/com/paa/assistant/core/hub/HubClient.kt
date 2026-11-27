@@ -65,11 +65,11 @@ class HubClient(private val pairing: HubPairing) {
 
     private val ssl = SSLContext.getInstance("TLS").apply { init(null, arrayOf(pinning), null) }
 
-    private suspend fun call(path: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
+    private suspend fun call(path: String, body: JSONObject? = null, readTimeoutMs: Int = 8_000): JSONObject = withContext(Dispatchers.IO) {
         val c = URL("https://${pairing.host}:${pairing.port}$path").openConnection() as HttpsURLConnection
         c.sslSocketFactory = ssl.socketFactory
         c.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }  // identity = the pinned cert, not the name
-        c.connectTimeout = 4_000; c.readTimeout = 8_000
+        c.connectTimeout = 3_000; c.readTimeout = readTimeoutMs
         c.setRequestProperty("Authorization", "Bearer ${pairing.token}")
         if (body != null) {
             c.requestMethod = "POST"; c.doOutput = true
@@ -90,4 +90,9 @@ class HubClient(private val pairing: HubPairing) {
     }
 
     suspend fun pair(device: String): Result<Boolean> = runCatching { call("/pair", JSONObject().put("device", device)).optBoolean("paired") }
+
+    /** The laptop's model reads one task prompt (already sanitised: OTPs masked, banking apps never get here). */
+    suspend fun extract(prompt: String): Result<String> = runCatching {
+        call("/extract", JSONObject().put("prompt", prompt), readTimeoutMs = 30_000).getString("output")
+    }
 }

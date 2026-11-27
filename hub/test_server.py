@@ -63,6 +63,39 @@ class HubTest(unittest.TestCase):
         code, body = self.call("/pair", self.token, {"device": "iQOO"})
         self.assertEqual((200, True, "iQOO"), (code, body["paired"], body["device"]))
 
+    def test_extract_without_model(self):
+        self.assertEqual(401, self.call("/extract", None, {"prompt": "x"})[0])
+        self.assertEqual(503, self.call("/extract", self.token, {"prompt": "x"})[0])
+
+    def test_extract_forwards_prompt(self):
+        seen = []
+        fake = lambda url, mode, prompt: seen.append((url, mode, prompt)) or '{"tasks": [], "reason": "chat", "done": [], "update": []}'
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(self.cert, self.key)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(self.token, 0, "http://127.0.0.1:1", "rules", fake))
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port, self.port = self.port, srv.server_address[1]
+        try:
+            code, body = self.call("/extract", self.token, {"prompt": "Owner: A or B, batch 2027\nMessage: \"hi\""})
+            self.assertEqual(200, code)
+            self.assertEqual([], json.loads(body["output"])["tasks"])
+            self.assertEqual("rules", seen[0][1])
+            self.assertEqual(400, self.call("/extract", self.token, {"prompt": ""})[0])
+            failing = lambda *a: (_ for _ in ()).throw(TimeoutError())
+            srv.RequestHandlerClass = server.make_handler(self.token, 0, "http://127.0.0.1:1", "rules", failing)
+            self.assertEqual(502, self.call("/extract", self.token, {"prompt": "x"})[0])
+        finally:
+            self.port = port
+            srv.shutdown()
+
+    def test_rules_prompt_uses_owner_line(self):
+        self.assertEqual(("A or B", 2027), server.owner_from_prompt("Now: x\nOwner: A or B, batch 2027\nMessage: y"))
+        msgs = server.llm_messages("Owner: A or B, batch 2027\nMessage: y", "rules")
+        self.assertEqual(["system", "user"], [m["role"] for m in msgs])
+        self.assertIn("A or B", msgs[0]["content"])
+        self.assertEqual([{"role": "user", "content": "p"}], server.llm_messages("p", "student"))
+
     def test_payload(self):
         p = server.pairing_payload("192.168.1.9", 8765, "t", "ab" * 32)
         self.assertEqual({"v", "host", "port", "token", "cert_sha256"}, set(p))

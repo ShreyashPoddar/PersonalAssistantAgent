@@ -317,6 +317,29 @@ Message (sent): "I already submitted it lol"
     @Volatile var lastError: String? = null
         private set
 
+    /** Which model read the last chat message: "laptop" (hub) or "phone". */
+    @Volatile var lastExtractBy: String = "-"
+    @Volatile private var hubDownUntil = 0L
+
+    /**
+     * The laptop's bigger model, when the hub is paired, switched on and reachable (text already sanitised upstream:
+     * OTPs masked, banking apps never reach the chat pipeline). Any failure → null and the phone's own model runs;
+     * after a failure the hub is skipped for 2 minutes so an absent laptop doesn't slow every message.
+     */
+    private suspend fun fromHub(message: String, ctx: ChatContext): ChatVerdict? {
+        if (System.currentTimeMillis() < hubDownUntil) return null
+        val settings = com.paa.assistant.core.hub.HubSettings(context)
+        val pairing = settings.pairing?.takeIf { settings.enabled } ?: return null
+        // the bare prompt: the laptop's server applies its own model's chat format
+        val prompt = buildCompactPrompt(message.take(1500), ctx).removePrefix("<start_of_turn>user\n")
+            .removeSuffix("<end_of_turn>\n<start_of_turn>model\n")
+        val out = com.paa.assistant.core.hub.HubClient(pairing).extract(prompt)
+        return out.mapCatching { parseVerdict(it) }.onSuccess { lastExtractBy = "laptop" }.onFailure {
+            hubDownUntil = System.currentTimeMillis() + 120_000
+            Log.w(tag, "hub extract failed: ${it.javaClass.simpleName}")
+        }.getOrNull().also { if (it == null) lastExtractBy = "phone" }
+    }
+
     /**
      * Loads the model and runs a tiny prompt. Returns a human-readable result for the "Test local AI" button.
      * Note: if the phone runs out of memory loading the model, Android kills the app — the persisted
@@ -379,6 +402,7 @@ Message (sent): "I already submitted it lol"
      * Returns null if the model is unavailable or fails.
      */
     suspend fun extractTasks(message: String, ctx: ChatContext): ChatVerdict? {
+        fromHub(message, ctx)?.let { return it }
         if (!isAvailable()) return null
         return withContext(Dispatchers.Default) {
             try {
