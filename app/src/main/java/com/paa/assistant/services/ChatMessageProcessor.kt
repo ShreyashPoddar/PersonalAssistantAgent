@@ -466,6 +466,16 @@ class ChatMessageProcessor @Inject constructor(
 
     private fun chatKey(msg: ChatMessage) = "${msg.app}|${msg.chatName ?: msg.sender ?: "?"}"
 
+    /** Already in this chat's recent history (the laptop's chat-list preview of a message the phone got as a notification). */
+    suspend fun seenRecently(msg: ChatMessage): Boolean {
+        val t = msg.text.trim().removeSuffix("…").take(60)
+        if (t.isEmpty()) return true
+        return runCatching { historyDao.recent(chatKey(msg), 20) }.getOrDefault(emptyList()).any { line ->
+            val said = line.substringAfter(": ", line).trim()
+            said.isNotEmpty() && (said.startsWith(t) || (said.length >= 12 && t.startsWith(said.take(60))))
+        }
+    }
+
     /** Saved conversation of this chat, oldest first (encrypted DB, survives restarts). */
     private suspend fun chatHistory(msg: ChatMessage): List<String> =
         runCatching { historyDao.recent(chatKey(msg), HISTORY_PER_CHAT + 10).reversed() }.getOrDefault(emptyList())

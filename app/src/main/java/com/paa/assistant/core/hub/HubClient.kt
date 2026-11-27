@@ -91,6 +91,20 @@ class HubClient(private val pairing: HubPairing) {
 
     suspend fun pair(device: String): Result<Boolean> = runCatching { call("/pair", JSONObject().put("device", device)).optBoolean("paired") }
 
+    /** One WhatsApp Desktop chat-list change the laptop saw (a preview: never the full chat; the laptop never opens chats). */
+    data class LaptopMessage(val seq: Long, val chat: String, val sender: String?, val text: String, val group: Boolean)
+
+    /** Laptop WhatsApp messages after [after] → (messages, last seq). */
+    suspend fun messages(after: Long): Result<Pair<List<LaptopMessage>, Long>> = runCatching {
+        val o = call("/messages?after=$after")
+        val arr = o.getJSONArray("items")
+        val items = (0 until arr.length()).map { arr.getJSONObject(it) }.map {
+            LaptopMessage(it.getLong("seq"), it.getString("chat"), it.optString("sender").takeIf { s -> s.isNotBlank() && s != "null" },
+                it.getString("text"), it.optBoolean("group"))
+        }
+        items to o.optLong("last", after)
+    }
+
     /** The laptop's model reads one task prompt (already sanitised: OTPs masked, banking apps never get here). */
     suspend fun extract(prompt: String): Result<String> = runCatching {
         call("/extract", JSONObject().put("prompt", prompt), readTimeoutMs = 30_000).getString("output")

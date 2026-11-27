@@ -61,9 +61,36 @@ class NotificationListener : NotificationListenerService() {
         // This service stays bound by Android, so it's the reliable place to watch for call recordings
         callRecordings.watch(scope)
         scope.launch { callRecordings.scanNew() }
+        laptopJob?.cancel()
+        laptopJob = scope.launch { pollLaptopWhatsApp() }
+    }
+
+    private var laptopJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * WhatsApp Desktop on the owner's laptop (hub --wa): chat-list previews the phone may have missed (grouped or
+     * muted notifications). Every 30 s while the hub is paired and on; a message the phone already saw is skipped.
+     */
+    private suspend fun pollLaptopWhatsApp() {
+        val prefs = getSharedPreferences("paa_hub", MODE_PRIVATE)
+        while (true) {
+            kotlinx.coroutines.delay(30_000)
+            val settings = com.paa.assistant.core.hub.HubSettings(this)
+            val pairing = settings.pairing?.takeIf { settings.enabled } ?: continue
+            var after = prefs.getLong("laptop_seq", 0)
+            val (items, last) = com.paa.assistant.core.hub.HubClient(pairing).messages(after).getOrNull() ?: continue
+            if (last < after) { after = 0; prefs.edit().putLong("laptop_seq", 0).apply(); continue }  // hub restarted
+            for (m in items) {
+                val msg = ChatMessage(text = m.text, app = ChatApp.WHATSAPP, outgoing = false, chatName = m.chat,
+                    sender = if (m.group) m.sender else m.chat, isGroup = m.group)
+                if (!processor.seenRecently(msg)) processor.process(msg)
+            }
+            prefs.edit().putLong("laptop_seq", last).apply()
+        }
     }
 
     override fun onListenerDisconnected() {
+        laptopJob?.cancel()
         instance = null
         DetectionLog.add("system", "Notification access", "❌ disconnected by Android (battery saver?)")
         super.onListenerDisconnected()

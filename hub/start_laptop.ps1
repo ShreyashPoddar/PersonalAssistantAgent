@@ -16,4 +16,5 @@ Start-Process -FilePath "$LlamaDir\llama-server.exe" -ArgumentList $serverArgs -
 Write-Host "model server starting (log: $log) ..."
 do { Start-Sleep -Seconds 2; $ok = try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8081/health).Content -match "ok" } catch { $false } } until ($ok)
 Write-Host "model ready; starting hub (prompt mode: $mode)"
-python "$PSScriptRoot\server.py" --llm http://127.0.0.1:8081 --llm-prompt $mode
+# --wa: also read WhatsApp Desktop's chat list (read-only; keep WhatsApp open or minimised, not closed)
+python "$PSScriptRoot\server.py" --llm http://127.0.0.1:8081 --llm-prompt $mode --wa

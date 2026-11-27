@@ -101,7 +101,7 @@ def ask_llm(url: str, mode: str, prompt: str, timeout: float = 60) -> str:
         return json.loads(r.read())["choices"][0]["message"]["content"]
 
 
-def make_handler(token: str, started: float, llm: str | None = None, llm_mode: str = "rules", ask=ask_llm):
+def make_handler(token: str, started: float, llm: str | None = None, llm_mode: str = "rules", ask=ask_llm, inbox=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = f"paa-hub/{VERSION}"
 
@@ -118,7 +118,13 @@ def make_handler(token: str, started: float, llm: str | None = None, llm_mode: s
                 return self._send(401, {"error": "unauthorized"})
             if self.path == "/health":
                 return self._send(200, {"ok": True, "version": VERSION, "uptime_s": int(time.time() - started),
-                                        "extract": bool(llm)})
+                                        "extract": bool(llm), "whatsapp": inbox is not None})
+            if self.path.startswith("/messages"):   # laptop WhatsApp previews the phone hasn't collected yet
+                if inbox is None:
+                    return self._send(503, {"error": "no WhatsApp reader on this hub"})
+                q = self.path.partition("?")[2]
+                after = next((int(v) for k, _, v in (x.partition("=") for x in q.split("&")) if k == "after" and v.isdigit()), 0)
+                return self._send(200, inbox.after(after))
             self._send(404, {"error": "not found"})
 
         def do_POST(self):
@@ -158,17 +164,25 @@ def main():
     ap.add_argument("--state", default=str(Path.home() / ".paa-hub"))
     ap.add_argument("--llm", help="llama.cpp server on this machine for /extract, e.g. http://127.0.0.1:8081")
     ap.add_argument("--llm-prompt", choices=["rules", "student"], default="rules")
+    ap.add_argument("--wa", action="store_true", help="read WhatsApp Desktop's chat list (read-only) for the phone")
     a = ap.parse_args()
     if a.llm and not a.llm.startswith(("http://127.0.0.1", "http://localhost")):
         sys.exit("--llm must be on this machine (chat text never leaves the owner's devices)")
     cert, key, token = ensure_state(Path(a.state))
+    inbox = None
+    if a.wa:
+        import threading
+        from wa_reader import Inbox, Reader
+        inbox = Inbox()
+        threading.Thread(target=Reader(inbox).run_forever, daemon=True).start()
+        print("WhatsApp Desktop reader on (chat list previews only; never opens a chat)")
     payload = pairing_payload(lan_ip(), a.port, token, cert_sha256(cert))
     print("Pairing payload (paste into PAA → Hub, or scan it as a QR):")
     print(json.dumps(payload))
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(cert, key)
-    srv = ThreadingHTTPServer(("0.0.0.0", a.port), make_handler(token, time.time(), a.llm, a.llm_prompt))
+    srv = ThreadingHTTPServer(("0.0.0.0", a.port), make_handler(token, time.time(), a.llm, a.llm_prompt, inbox=inbox))
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     print(f"hub listening on https://{payload['host']}:{a.port}", flush=True)
     srv.serve_forever()
