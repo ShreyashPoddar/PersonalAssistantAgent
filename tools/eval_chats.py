@@ -161,11 +161,15 @@ def main():
         print(f"{'PASS' if not fails else 'FAIL'}  {s['id']}  ({rows[-1][2]}s)", flush=True)
         for f in fails:
             print("      " + f, flush=True)
-    # Remove only this run's scenario tasks and chat lines (the owner's own data is left alone)
-    adb(a.serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
-        "--es", "delete_source_like", f"E{run_id}")
+    # Remove only this run's scenario tasks and chat lines (the owner's own data is left alone). Twice: lines the
+    # listener was still processing landed after the first pass (34 left on 2026-11-27).
+    for i in range(2):
+        adb(a.serial, "shell", "am", "broadcast", "-a", "com.paa.assistant.DEBUG_INJECT", "-p", "com.paa.assistant",
+            "--es", "delete_source_like", f"E{run_id}")
+        if i == 0:
+            time.sleep(20)
     passed = sum(1 for r in rows if r[1])
-    print(f"\n{passed}/{len(rows)} passed")
+    print(f"\n{passed}/{len(rows)} passed; failed: {', '.join(r[0] for r in rows if not r[1]) or 'none'}")
     sys.exit(0 if passed == len(rows) else 1)
 
 

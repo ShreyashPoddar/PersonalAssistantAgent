@@ -131,6 +131,10 @@ like a person would and list the real to-dos THE OWNER must do. Reply with ONLY 
 Rules:
 - A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
 - Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
+- Not a task: someone ELSE promising to do something themselves. "main/mai … kar dunga / bhej deta hu / batati hu",
+  "I'll draft it", "kal tak de dunga" in a message the owner RECEIVED is the sender's own promise, not the owner's
+  (only lines from 'You' or a SENT message are the owner's promises). Also not a task: someone asking the owner whether
+  THEY should do something ("should I upload it?", "kya mai bhi apply karu?").
 - Not a task: advice, care or wishes ("so jao", "health ka dhyan rakho", "khana kha lena", "all the best"); questions that
   only ask for information; files or receipts someone sent; anything from a company, shop, bank, travel or delivery
   account (bookings, ratings, feedback, OTPs, receipts, offers).
@@ -243,6 +247,12 @@ TITLE_WORDS = {"the", "and", "for", "lab", "ppt", "pdf", "monday", "tuesday", "w
                "record", "student", "experimental", "independence", "diwali", "holi", "upi", "excel", "word"}
 
 
+def no_task_category(cat: str) -> bool:
+    """Categories written to have NO task for the owner. The teacher's only check is agreeing with itself, and on
+    data-v9 it consistently labelled 288/385 "someone promises the OWNER" scenarios as owner tasks; drop those."""
+    return bool(re.search(r"[-(] ?not (a|the owner's) task\b", cat)) and not re.search(r"\bOR\b|[-(] ?a task\b", cat)
+
+
 def sane(label: dict, prompt: str, n_open: int) -> str:
     """'' if the label is usable, else why not."""
     for t in label.get("tasks") or []:
@@ -353,6 +363,7 @@ def main():
                     alts = [first_json(o.text) for o in s.outputs]
                     why = ("unparsable" if not isinstance(gold, dict) or not all(isinstance(x, dict) for x in alts) else
                            "teacher disagrees" if not all(agree(gold, x) for x in alts) else
+                           "category says no task" if no_task_category(p["category"]) and gold.get("tasks") else
                            sane(gold, conv[1]["content"], len(r["ctx"]["open_tasks"])))
                     row = {"idx": p["idx"], "keep": not why, "why": why, **r}
                     if not why:
