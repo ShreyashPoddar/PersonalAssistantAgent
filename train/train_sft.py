@@ -135,7 +135,9 @@ def main():
     for name in filter(None, a.extra_data.split(",")):   # older rounds' train sets, next to this one (val/test stay this round's)
         extra = data.parent / name / "train.jsonl"
         assert extra.exists(), f"--extra-data: no {extra}"
-        rows += load(extra)
+        # older rounds lack gen_data v10's filter: drop no-task-category rows the teacher labelled as tasks
+        from gen_data import no_task_category
+        rows += [r for r in load(extra) if not (no_task_category(r.get("category", "")) and r["target"].get("tasks"))]
     train, val = Data(rows, tok, a.max_len), Data(load(data / "val.jsonl"), tok, a.max_len)
     print(f"train {len(train)}  val {len(val)}", flush=True)
     if PAUSE.is_set():
