@@ -31,12 +31,21 @@ MAX_BODY = 64 * 1024
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "train"))
 
 
+def openssl() -> str:
+    """openssl on PATH, else the one Git for Windows ships (plain PowerShell doesn't have it on PATH)."""
+    import shutil
+    for c in (shutil.which("openssl"), r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe"):
+        if c and Path(c).exists():
+            return c
+    sys.exit("openssl not found: install Git for Windows (it includes openssl) or add openssl to PATH")
+
+
 def ensure_state(state: Path) -> tuple[Path, Path, str]:
     """Cert, key and token in [state]; created once (openssl), reused after."""
     state.mkdir(parents=True, exist_ok=True)
     cert, key, tok = state / "hub.crt", state / "hub.key", state / "token"
     if not (cert.exists() and key.exists()):
-        subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+        subprocess.run([openssl(), "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
                         "-nodes", "-keyout", str(key), "-out", str(cert), "-days", "3650", "-subj", "/CN=paa-hub"],
                        check=True, capture_output=True)
     if not tok.exists():
