@@ -204,3 +204,7 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   Owner: run hub\start_laptop.ps1, paste the pairing payload into PAA → Hub, switch it on.
   The laptop froze once with WSL CPU scoring + llama-server + a Gradle build at the same time: don't run CPU
   scoring while the model server and a build are running (stop with `wsl --shutdown`, `gradlew --stop`).
+- **2026-11-28 end-to-end over Tailscale works:** phone 100.98.246.52 → hub 100.105.190.108:8765 (POST /pair,
+  GET /health, GET /messages every 30 s, POST /extract). Tagged test (E9001 phone model, E9002 laptop Gemma 4 12B)
+  gave "Send lab record to Kunal · due Sun 29 Nov 9:00 AM" from both; second deduped. Test data removed (43 tasks).
+  Phone Tailscale must be ON (it was off at first: no VPN network, ping failed).
