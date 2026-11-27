@@ -86,7 +86,8 @@ class HubClient(private val pairing: HubPairing) {
 
     suspend fun health(): Result<String> = runCatching {
         val o = call("/health")
-        "Hub OK (v${o.optString("version")}, up ${o.optLong("uptime_s") / 60} min)"
+        "Hub OK (v${o.optString("version")}, up ${o.optLong("uptime_s") / 60} min) · laptop AI " +
+            (if (o.optBoolean("extract")) "on" else "off") + " · WhatsApp Desktop " + (if (o.optBoolean("whatsapp")) "on" else "off")
     }
 
     suspend fun pair(device: String): Result<Boolean> = runCatching { call("/pair", JSONObject().put("device", device)).optBoolean("paired") }

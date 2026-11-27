@@ -42,10 +42,18 @@ fun HubCard(surfaceColor: Color, accentColor: Color, textPrimary: Color, textSec
         Column(Modifier.padding(14.dp)) {
             Text("🖥️ Hub (laptop)", color = textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(
-                paired?.let { "Paired with ${it.host}:${it.port}" }
-                    ?: "Run `python hub/server.py` on your laptop and paste the pairing line it prints. Used later for AI on calls.",
+                paired?.let { "Paired with ${it.host}:${it.port}. When it's reachable, chats are read by the laptop's bigger AI " +
+                    "and WhatsApp Desktop's chat list is checked; otherwise the phone's own AI is used." }
+                    ?: "Run hub\\start_laptop.ps1 on your laptop (Tailscale on) and paste the pairing line it prints.",
                 color = textSecondary, fontSize = 12.sp
             )
+            if (paired != null) {
+                var on by remember { mutableStateOf(settings.enabled) }
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("Use the laptop", color = textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = on, onCheckedChange = { on = it; settings.enabled = it })
+                }
+            }
             if (paired == null) {
                 OutlinedTextField(payload, { payload = it }, label = { Text("Pairing line") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
             }
