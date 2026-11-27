@@ -294,18 +294,17 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-eager", dest="eager", action="store_false",
                     help="allow CUDA graphs / torch.compile (faster, but more ways to fail at start-up)")
+    ap.add_argument("--shard", type=int, default=0, help=argparse.SUPPRESS)    # set by fan_out for its workers
+    ap.add_argument("--shards", type=int, default=0, help=argparse.SUPPRESS)
     a = ap.parse_args()
-    hold = hold_gpu()   # first thing: claim the card before the slow imports, so nobody else takes it meanwhile
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    labeled = out / "labeled.jsonl"
-    done = set()
-    if labeled.exists():
-        for line in labeled.open(encoding="utf-8"):
-            try:
-                done.add(json.loads(line)["idx"])
-            except Exception:
-                pass
-    todo = [i for i in range(a.n) if i not in done]
+    devs = [d for d in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d.strip()]
+    if not a.shards and len(devs) >= 2 * a.tp:   # a job given several cards: one teacher per card, half the work each
+        return fan_out(a, out, devs)
+    hold = hold_gpu()   # first thing: claim the card before the slow imports, so nobody else takes it meanwhile
+    labeled = out / (f"labeled-s{a.shard}.jsonl" if a.shards else "labeled.jsonl")
+    done = done_ids(out)
+    todo = [i for i in range(a.n) if i not in done and (not a.shards or i % a.shards == a.shard)]
     print(f"{len(done)} done, {len(todo)} to go, teacher {a.teacher}", flush=True)
 
     if todo:
@@ -369,10 +368,51 @@ def main():
                     if not why:
                         row["target"] = json.loads(canonical_target(gold))
                     f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            print(f"chunk {c0 // a.chunk + 1}: {c0 + len(plans)}/{len(todo)}", flush=True)
+            print(f"chunk {c0 // a.chunk + 1}: {c0 + len(plans)}/{len(todo)}" + (f" (shard {a.shard})" if a.shards else ""),
+                  flush=True)
+    if not a.shards:
+        finish(out)
 
+
+def labeled_files(out: Path) -> list:
+    return sorted(out.glob("labeled*.jsonl"))   # labeled.jsonl, or labeled-s0.jsonl, labeled-s1.jsonl, ... (fan_out)
+
+
+def done_ids(out: Path) -> set:
+    done = set()
+    for f in labeled_files(out):
+        for line in f.open(encoding="utf-8"):
+            try:
+                done.add(json.loads(line)["idx"])
+            except Exception:
+                pass
+    return done
+
+
+def fan_out(a, out: Path, devs: list) -> None:
+    """One worker per card (or per --tp cards), each on every m-th scenario into its own labeled-s<i>.jsonl; then the
+    usual split over all of them. Roughly m times faster. A pause (SIGUSR1 reaches every worker: same cwd) or a crash
+    ends the job; a re-run continues each shard from its file."""
+    import subprocess
+    m = len(devs) // a.tp
+    procs = []
+    for i in range(m):
+        env = {**os.environ, "CUDA_VISIBLE_DEVICES": ",".join(devs[i * a.tp:(i + 1) * a.tp])}
+        procs.append(subprocess.Popen([sys.executable, __file__, *sys.argv[1:], "--shard", str(i), "--shards", str(m)],
+                                      env=env))
+    print(f"fan-out: {m} workers on cards {','.join(devs)}", flush=True)
+    codes = [p.wait() for p in procs]
+    print(f"workers exited {codes}", flush=True)
+    if 75 in codes:
+        os._exit(75)
+    if any(codes):
+        sys.exit(next(c for c in codes if c))
+    finish(out)
+
+
+def finish(out: Path) -> None:
     # split by a hash of the id, so re-runs and resumes always put a record in the same split
-    rows = [json.loads(l) for l in labeled.open(encoding="utf-8")]
+    rows = [json.loads(l) for f in labeled_files(out) for l in f.open(encoding="utf-8")]
     kept = [r for r in rows if r.get("keep")]
     splits = {"train": [], "val": [], "test": []}
     for r in kept:
