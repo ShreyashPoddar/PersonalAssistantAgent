@@ -198,3 +198,9 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - When v5 finishes (`python tools/gpu.py status` / `watch`): fetch export-1b-v5, phone-eval with
   `tools/eval_chats.py --serial <ip:port>` (watch memory), keep the better of v4/v5. Give the GPU back when done.
 - Ask the owner for the T3/T5 phone checks and to re-enable accessibility.
+- **2026-11-28 laptop path live:** Tailscale installed on the laptop (100.105.190.108); hub binds ONLY to the
+  Tailscale IP by default (`--network lan` for the old way); openssl found from Git for Windows. New app build
+  installed on the phone (data kept: 43 tasks, 2100 chat lines; backup PAA-private/backup-2026-11-28.json).
+  Owner: run hub\start_laptop.ps1, paste the pairing payload into PAA → Hub, switch it on.
+  The laptop froze once with WSL CPU scoring + llama-server + a Gradle build at the same time: don't run CPU
+  scoring while the model server and a build are running (stop with `wsl --shutdown`, `gradlew --stop`).
