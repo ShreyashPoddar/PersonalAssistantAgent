@@ -71,6 +71,10 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - Root cause of "someone else's promise": the teacher's only check is self-agreement, and in no-task categories it
   consistently labels tasks (data-v9: 288/385 promises, 537/539 random-group hackathon @mentions, 172/645 company
   accounts). gen_data v10 drops those ("category says no task") + explicit rule. **v10 queued** (data → chain → export).
+- **v10 private set: 49/64** — promise 2/2 (fixed), 0 owner-named titles, 3 false tasks (v9 6), but recall 26/39
+  (v9 34): requests 11/18, pieces 0/3. DGX scenarios 21/25 (someone_elses_promise passes). Not phone-tested.
+  Queued `chain-1b-v10mix` = v10 + data-v9 with the same filter applied in train_sft (15707 → 13979 rows), 2 epochs.
+  Score: `bash ../PAA-private/score_models.sh v10mix`; candidate needs > 53/64 or v9's recall without its faults.
 - **PAA screen reading (accessibility) was found OFF** on 2026-11-26 — left for the owner (may be deliberate).
 
 ## 2026-11-22
