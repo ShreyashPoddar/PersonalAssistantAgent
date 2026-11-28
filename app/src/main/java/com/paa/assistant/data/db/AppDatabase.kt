@@ -21,8 +21,8 @@ import com.paa.assistant.data.models.TaskFeedbackEntity
     entities = [TaskEntity::class, MemoryFactEntity::class, FileIndexEntity::class, TaskFeedbackEntity::class, com.paa.assistant.data.models.ChatLineEntity::class,
         com.paa.assistant.data.models.ContactRuleEntity::class, com.paa.assistant.data.models.AuditEntryEntity::class,
         com.paa.assistant.data.models.TransactionEntity::class, com.paa.assistant.data.models.MerchantRuleEntity::class,
-        com.paa.assistant.data.models.LedgerEntryEntity::class],
-    version = 7,
+        com.paa.assistant.data.models.LedgerEntryEntity::class, com.paa.assistant.data.models.SavedOrderEntity::class],
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -35,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun contactRuleDao(): ContactRuleDao
     abstract fun auditDao(): AuditDao
     abstract fun moneyDao(): MoneyDao
+    abstract fun savedOrderDao(): SavedOrderDao
 
     companion object {
         const val DATABASE_NAME = "paa_database"
@@ -108,6 +109,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v8: "my usual X" saved orders (P3-T6). Keeps everything else. */
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `saved_orders` (`label` TEXT NOT NULL, `app` TEXT NOT NULL, " +
+                        "`cartSummary` TEXT NOT NULL, `amountPaise` INTEGER NOT NULL, `upiApp` TEXT, " +
+                        "`savedAt` INTEGER NOT NULL, `timesUsed` INTEGER NOT NULL, PRIMARY KEY(`label`))"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -127,7 +139,7 @@ abstract class AppDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                     .openHelperFactory(SupportOpenHelperFactory(passphrase.toByteArray()))
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

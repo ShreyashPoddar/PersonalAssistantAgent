@@ -49,7 +49,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P3-T3 Swiggy/Zomato via MCP (if terms allow — Test 13)
 - [ ] P3-T4 Shopping flows (Blinkit→Zepto→Amazon→Flipkart→Myntra)
 - [~] P3-T5 Travel compare — voice "bus/train/flight from X to Y on <day>" → web fares (route+date only) or search page; booking by owner; phone check pending
-- [ ] P3-T6 Reorder memory
+- [~] P3-T6 Reorder memory — SavedOrders ("save this as my usual X" / "order my usual X" parsing, label lookup, cart rebuild → a fresh PlaceOrder that goes through Guard + fingerprint again, summary marked "last time's price"); saved_orders table (DB v8, MIGRATION_7_8); 5 tests. Voice wiring pending
 - [~] P3-T7 Order safety review — per-order cap (default ₹2,000, AgentSettings.orderCapPaise; 0 falls back to the default): above it the confirm sheet warns and the first Confirm only acknowledges, then "Yes, pay" → fingerprint (2 tests). OrderSafetyTest + cart read-back pending (needs T2 flow engine)
 - [ ] Phase 3 exit check
 

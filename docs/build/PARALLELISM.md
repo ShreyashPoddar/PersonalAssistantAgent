@@ -116,7 +116,7 @@ Parallel lanes that rarely touch each other:
    | 7 | P2-T4 (transactions) |
    | 8 | P2-T5 (merchant_rules) |
    | 9 | P2-T7 (ledger) |
-   | 10 | P3-T6 (saved_orders) |
+   | 10 | P3-T6 (saved_orders) — landed as v8 (v7 already held transactions + merchant_rules + ledger) |
    | 11 | P4-T6 (ai_call_log) |
    Any new DB-touching task takes the **next free number here** and updates this table in the same commit. Do all DB
    migrations through `main` (not parallel long branches) to keep the sequence clean; if two land close together,
