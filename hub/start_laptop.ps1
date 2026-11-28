@@ -34,4 +34,7 @@ do {
 } until ($ok)
 Write-Host "model ready; starting hub (prompt mode: $mode)"
 # --wa: also read WhatsApp Desktop's chat list (read-only; keep WhatsApp open or minimised, not closed)
+# one hub at a time: an old one keeps its WhatsApp reader running and may hold the port
+Get-CimInstance Win32_Process -Filter "name='python.exe'" | Where-Object { $_.CommandLine -like '*hub*server.py*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 python "$PSScriptRoot\server.py" --llm http://127.0.0.1:8081 --llm-prompt $mode --wa
