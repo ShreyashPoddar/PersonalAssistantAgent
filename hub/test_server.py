@@ -20,6 +20,8 @@ class HubTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         cls.cert, cls.key, cls.token = server.ensure_state(cls.tmp)
+        cls.real_mode_file = server.MODE_FILE
+        server.MODE_FILE = cls.tmp / "llm_mode"   # the laptop's real ~/.paa-hub/llm_mode must not leak into tests
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(cls.cert, cls.key)
         cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(cls.token, 0))
@@ -30,6 +32,7 @@ class HubTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        server.MODE_FILE = cls.real_mode_file
 
     def call(self, path, token=None, body=None):
         ctx = ssl.create_default_context()
@@ -88,6 +91,16 @@ class HubTest(unittest.TestCase):
         finally:
             self.port = port
             srv.shutdown()
+
+    def test_mode_file_switches_prompt(self):
+        try:
+            self.assertEqual("rules", server.current_mode("rules"))      # no file: the default
+            server.MODE_FILE.write_text("student\n")
+            self.assertEqual("student", server.current_mode("rules"))
+            server.MODE_FILE.write_text("bogus")
+            self.assertEqual("rules", server.current_mode("rules"))      # unknown value: the default
+        finally:
+            server.MODE_FILE.unlink(missing_ok=True)
 
     def test_rules_prompt_uses_owner_line(self):
         self.assertEqual(("A or B", 2027), server.owner_from_prompt("Now: x\nOwner: A or B, batch 2027\nMessage: y"))
