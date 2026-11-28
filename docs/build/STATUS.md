@@ -44,7 +44,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] Phase 2 exit check
 
 ## Phase 3 — orders + travel (`P3_orders_travel.md`)
-- [~] P3-T1 Payment hand-off — PaymentHandoff + PaymentSkill (opens a known UPI app or leaves the merchant on its payment step; PIN note on the confirm sheet; 8 tests). Reading the merchant confirmation afterwards + phone check pending
+- [~] P3-T1 Payment hand-off — PaymentHandoff + PaymentSkill (opens a known UPI app or leaves the merchant on its payment step; PIN note on the confirm sheet; 8 tests). OrderConfirmationTracker reads the merchant/UPI app's next notification (30 min, amount within ₹1) and audits paid/failed/pending from the order's own fields (6 tests). Phone check pending
 - [ ] P3-T2 Screen-flow engine
 - [ ] P3-T3 Swiggy/Zomato via MCP (if terms allow — Test 13)
 - [ ] P3-T4 Shopping flows (Blinkit→Zepto→Amazon→Flipkart→Myntra)
