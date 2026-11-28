@@ -226,3 +226,8 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   lora-12b-v11b (Gemma 4 12B LoRA, data-v11 + cleaned data-v10). (lora-12b-v11 stopped: queued on the old ref.)
   Next: download train-12b-v11/paa-lora.gguf into %USERPROFILE%\paa-llm\lora\, score with
   llama-server --lora-init-without-apply + `eval_real --prompt student --lora 1`; ship if > 53/64.
+- **2026-11-28 hourly runner:** scheduled task `paa-hourly` (Claude desktop app, :17–:18 every hour, Auto mode;
+  prompt in %USERPROFILE%\.claude\scheduled-tasks\paa-hourly\SKILL.md). Each run: DGX status/crashes → keep a round
+  queued → score + ship finished models (12B adapter: newest paa-lora.gguf under paa-llm\lora is what the launcher
+  serves; rejected ones go to paa-llm\lora-rejected\) → laptop hub health/restart → build backlog → HANDOFF entry.
+  Runs only while the Claude app is open (missed runs fire on next launch).
