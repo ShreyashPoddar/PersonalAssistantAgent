@@ -18,6 +18,13 @@ TIME = re.compile(r"\s(\d{1,2}:\d{2}\s?(?:am|pm|AM|PM)?|Yesterday|Today|\d{1,2}/
                   r"Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?=\s|$)")
 UI_NOISE = re.compile(r"\s*(Muted chat|Pinned chat|\d+ unread messages?|unread messages?|Draft)\s*")
 SENDER = re.compile(r"^(~?[^:]{1,40}?)\s:\s+(.*)$", re.S)
+# Shown in place of the preview for a few seconds; the old preview comes back after. Never a message, never stored.
+TRANSIENT = re.compile(r"^(?:.{0,40}\s)?(?:is\s)?(?:typing|recording audio|recording video)(?:…|\.\.\.)?$", re.I)
+# Placeholders that replace a real preview: remembered (so the next real one is compared to them), never an event.
+PLACEHOLDER = re.compile(r"^(This message was deleted|You deleted this message|Waiting for this message.*|"
+                         r"Missed (voice|video) call|Voice call|Video call)$", re.I)
+TOP_ROWS = 3        # a chat first seen after seeding only counts if it is near the top (new messages move it up)
+HISTORY = 4         # previews remembered per chat: one that comes back (after typing…, an edit) is not new again
 
 
 def parse_row(row: str):
@@ -63,7 +70,7 @@ class Reader:
     def __init__(self, inbox: Inbox, every: float = 20, snapshot=None):
         self.inbox, self.every = inbox, every
         self.snapshot = snapshot or self._ps_snapshot
-        self.last: dict = {}   # chat -> last preview seen
+        self.last: dict = {}   # chat -> recent previews seen (newest last), in memory only
         self.seeded = False
 
     @staticmethod
@@ -78,16 +85,21 @@ class Reader:
         if rows is None:          # WhatsApp window closed: keep the old state, try again later
             return 0
         new = 0
-        for row in rows:
+        for i, row in enumerate(rows):
             p = parse_row(row)
-            if not p:
+            if not p or TRANSIENT.match(p["text"]):
                 continue
-            key = p["chat"]
-            if self.last.get(key) != p["text"]:
-                if self.seeded and not p["outgoing"]:
-                    self.inbox.add(p)
-                    new += 1
-                self.last[key] = p["text"]
+            seen = self.last.get(p["chat"])
+            if seen is not None and p["text"] in seen:
+                continue
+            fresh_chat = seen is None
+            if seen is None:
+                seen = self.last[p["chat"]] = deque(maxlen=HISTORY)
+            seen.append(p["text"])
+            if (self.seeded and not p["outgoing"] and not PLACEHOLDER.match(p["text"])
+                    and (not fresh_chat or i < TOP_ROWS)):   # a chat scrolled into view is old, not new
+                self.inbox.add(p)
+                new += 1
         self.seeded = True
         return new
 

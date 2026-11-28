@@ -44,6 +44,28 @@ class ReaderTest(unittest.TestCase):
         self.assertEqual(["notes bhej"], [i["text"] for i in got["items"]])
         self.assertEqual([], box.after(got["last"])["items"])
 
+    def run_snaps(self, snaps):
+        box = Inbox()
+        r = Reader(box, snapshot=lambda: snaps.pop(0))
+        counts = [r.step() for _ in range(len(snaps))]
+        return counts, [i["text"] for i in box.after(0)["items"]]
+
+    def test_typing_then_old_preview_is_not_new(self):
+        counts, texts = self.run_snaps([["Riya 1:00 pm hi"], ["Riya 1:00 pm typing…"], ["Riya 1:00 pm hi"],
+                                        ["Riya 1:01 pm Arjun is typing..."], ["Riya 1:02 pm notes bhej"]])
+        self.assertEqual([0, 0, 0, 0, 1], counts)
+        self.assertEqual(["notes bhej"], texts)
+
+    def test_deleted_placeholder_is_not_an_event(self):
+        counts, _ = self.run_snaps([["Dev 1:00 pm ok"], ["Dev 1:01 pm This message was deleted"], ["Dev 1:02 pm ppt bhej"]])
+        self.assertEqual([0, 0, 1], counts)
+
+    def test_chat_scrolled_into_view_is_old(self):
+        top = ["A 1:00 pm a", "B 1:00 pm b", "C 1:00 pm c"]
+        counts, texts = self.run_snaps([top, top + ["Old 9:00 am purana"], ["New 1:05 pm naya"] + top])
+        self.assertEqual([0, 0, 1], counts)    # first seen far down: old; first seen at the top: new
+        self.assertEqual(["naya"], texts)
+
 
 if __name__ == "__main__":
     unittest.main()
