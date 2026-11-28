@@ -77,4 +77,4 @@ jobs:
   - {id: lora-12b-v11b, step: train, ref: 91841808b38c, out: train-12b-v11, after: data-v11, args: "--lora --base google/gemma-4-12B-it --extra-data data-v10 --epochs 2"}
   - {id: data-v12, step: gen_data, ref: 02112d8bb692, out: data-v12, after: lora-12b-v11b, gpus: 2, args: "--n 25000 --seed 12"}
   - {id: lora-12b-v12, step: train, ref: 02112d8bb692, out: train-12b-v12, after: data-v12, args: "--lora --base google/gemma-4-12B-it --extra-data data-v11 --epochs 2"}
-control: {status: 34, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3, data-v7, lora-12b-v10], stop: [chain-270m-v4, chain-270m-v5, chain-1b-v7, export-1b-v7, lora-12b-v11]}
+control: {status: 34, logs: [data-v1b, chain-1b-v1b, chain-270m-v1b, chain-1b-v2, chain-1b-v3, data-v7, lora-12b-v10, lora-12b-v11b], stop: [chain-270m-v4, chain-270m-v5, chain-1b-v7, export-1b-v7, lora-12b-v11]}
