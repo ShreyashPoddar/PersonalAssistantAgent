@@ -35,6 +35,14 @@ def bootstrap():
     sys.path.insert(0, str(LIB))
 
 
+def owner_in_title(r: dict) -> bool:
+    """Older rounds kept titles with the owner's name (gen_data v11 rejects them)."""
+    import re
+    owners = {n.lower() for n in r.get("owner_names") or []}
+    return any(owners & {w.lower().removesuffix("'s") for w in re.findall(r"[A-Za-z']+", str(t.get("title", "")))}
+               for t in r["target"].get("tasks") or [])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lora", action="store_true")
@@ -70,7 +78,7 @@ def main():
     rows = load(data / "train.jsonl")
     for name in filter(None, a.extra_data.split(",")):
         rows += [r for r in load(data.parent / name / "train.jsonl")
-                 if not (no_task_category(r.get("category", "")) and r["target"].get("tasks"))]
+                 if not (no_task_category(r.get("category", "")) and r["target"].get("tasks")) and not owner_in_title(r)]
     val_rows = load(data / "val.jsonl")
 
     tok = AutoTokenizer.from_pretrained(a.base)
