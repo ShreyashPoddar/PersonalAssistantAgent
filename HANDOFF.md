@@ -211,3 +211,9 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
 - **v10mix private set: 48/64** (v9 53, v7b 51, v10 49): job posts 5/5 but 5 owner-named titles, 9 false tasks,
   requests 11/18. Not shipped. The 1B rounds swing 41–53 on 64 cases (noise ±3); next effort goes to the laptop 12B.
   Scoring now runs on the laptop GPU next to llama-server: PAA-private/run_eval_real_gpu.sh (nice 19, no freeze).
+- **Trained Gemma 4 12B (lora-12b-v10) on the private set: 53/64** (= v9 best), false tasks 4 (lowest), job posts
+  5/5, promise 2/2, owner-named titles 2, requests 12/18, pieces 1/3; 1.7 s median, 4.8 s max (student prompt).
+  Train loss .170, eval .145. Adapter: %USERPROFILE%\paa-llm\lora\train-12b-v10\paa-lora.gguf (131 MB).
+  start_laptop.ps1 now uses the newest adapter by default (-NoLora for the plain model) and writes
+  ~/.paa-hub/llm_mode, which the hub reads per request. Per-request test: `eval_real --server ... --prompt student --lora 1`
+  with llama-server --lora X --lora-init-without-apply (global scale 0 keeps live traffic unchanged).
