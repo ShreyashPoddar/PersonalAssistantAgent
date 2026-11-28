@@ -217,3 +217,12 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   start_laptop.ps1 now uses the newest adapter by default (-NoLora for the plain model) and writes
   ~/.paa-hub/llm_mode, which the hub reads per request. Per-request test: `eval_real --server ... --prompt student --lora 1`
   with llama-server --lora X --lora-init-without-apply (global scale 0 keeps live traffic unchanged).
+- **2026-11-28 live:** laptop runs trained Gemma 4 12B (train-12b-v10) via hub\start_laptop.ps1 (fixed: the
+  chat-template JSON is passed via LLAMA_ARG_CHAT_TEMPLATE_KWARGS; Start-Process split it and llama-server exited).
+  Hub /extract verified: 2.2 s, student mode.
+- **Why titles named the owner:** gen_data's invented-name check passes the owner's name (it is in the prompt);
+  data-v9 had 389/15707 such rows. gen_data v11 rejects them; train_lora drops them from --extra-data.
+- **Queued:** data-v11 (25k, seed 11, 2 cards = fan-out, more weight on requests in pieces / owner named) →
+  lora-12b-v11b (Gemma 4 12B LoRA, data-v11 + cleaned data-v10). (lora-12b-v11 stopped: queued on the old ref.)
+  Next: download train-12b-v11/paa-lora.gguf into %USERPROFILE%\paa-llm\lora\, score with
+  llama-server --lora-init-without-apply + `eval_real --prompt student --lora 1`; ship if > 53/64.
