@@ -34,6 +34,18 @@ object PaymentHandoff {
     /** P3-T7 per-order cap (owner can raise it): above this PAA warns and asks for a second, explicit confirm. */
     const val DEFAULT_CAP_PAISE = 2_000_00L
 
+    /**
+     * The owner's typed cap in whole rupees ("5000", "₹5,000", "5,000 rs") → paise; null when it isn't a whole
+     * number from ₹100 to ₹1,00,000 (the cap can be moved, never removed).
+     */
+    fun parseCapRupees(text: String): Long? {
+        val t = text.trim().lowercase().removePrefix("₹").removePrefix("rs").removePrefix(".")
+            .removeSuffix("rupees").removeSuffix("rs").removeSuffix("₹").trim().replace(",", "")
+        if (t.isEmpty() || !t.all { it.isDigit() } || t.length > 7) return null
+        val paise = t.toLong() * 100
+        return if (paise in 100_00L..MAX_PAISE) paise else null
+    }
+
     /** True when [amountPaise] is above the owner's cap (a cap <= 0 falls back to the default, never "no cap"). */
     fun overCap(amountPaise: Long, capPaise: Long): Boolean =
         amountPaise > (if (capPaise > 0) capPaise else DEFAULT_CAP_PAISE)

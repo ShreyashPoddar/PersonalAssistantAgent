@@ -129,4 +129,18 @@ class PaymentHandoffTest {
         assertTrue(PaymentHandoff.overCap(2_000_01, 0))
         assertTrue(PaymentHandoff.overCap(2_000_01, -1))
     }
+
+    @Test
+    fun capTypedInRupees() {
+        assertEquals(5_000_00L, PaymentHandoff.parseCapRupees("5000"))
+        assertEquals(5_000_00L, PaymentHandoff.parseCapRupees(" ₹5,000 "))
+        assertEquals(5_000_00L, PaymentHandoff.parseCapRupees("5,000 rs"))
+        assertEquals(1_00_000_00L, PaymentHandoff.parseCapRupees("1,00,000"))
+        assertEquals(null, PaymentHandoff.parseCapRupees("0"))
+        assertEquals(null, PaymentHandoff.parseCapRupees("50"))
+        assertEquals(null, PaymentHandoff.parseCapRupees("200000"))
+        assertEquals(null, PaymentHandoff.parseCapRupees("12.5"))
+        assertEquals(null, PaymentHandoff.parseCapRupees("-500"))
+        assertEquals(null, PaymentHandoff.parseCapRupees(""))
+    }
 }
