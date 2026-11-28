@@ -160,6 +160,7 @@ budget() {  # shared GPU budget for both projects -> MODE, ALLOW; pauses PAA job
   local pol last
   pol=$(PAA_WANTING=$(gpu_wanting) timeout 60 python "$HERE/paa_policy.py" "$ROOT" 2>"$ROOT/sched.err") || pol="MODE error"$'\n'"ALLOW 0"
   MODE=$(printf '%s\n' "$pol" | sed -n 's/^MODE //p'); ALLOW=$(printf '%s\n' "$pol" | sed -n 's/^ALLOW //p'); ALLOW=${ALLOW:-0}
+  PAA_CARDS=$(printf '%s\n' "$pol" | sed -n 's/^PAA //p'); PAA_CARDS=${PAA_CARDS:-0}
   for j in $(printf '%s\n' "$pol" | sed -n 's/^PREEMPT //p'); do pause_job "$j"; ALLOW=0; done
   last=$(cat "$ROOT/last_mode" 2>/dev/null)
   if [ "${MODE%% *}" != "${last%% *}" ]; then   # day <-> night (or an error): say so once
@@ -179,6 +180,23 @@ launch_one() {  # $@ = id step ref out after gpus resume args -> launch.sh rc; r
   OUT_TXT=$(PAA_LEAVE_FREE=0 timeout 300 bash "$HERE/launch.sh" "${largs[@]}" -- "${extra[@]}" 2>&1); local rc=$?
   [ "$rc" = 0 ] && printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$step" "$ref" "$out" "$after" "$gpus" "1" "$args" > "$ROOT/jobs/$id/job.line"
   return $rc
+}
+
+keep_reserve() {  # owner 2026-11-28: always hold PAA's 2 cards; a reserve job only holds one (train/reserve.py)
+  local want=${PAA_KEEP_CARDS:-2} have id
+  have=$((PAA_CARDS + LAUNCHED_GPU))
+  if [ "$(gpu_wanting)" -gt 0 ]; then       # real PAA work is ready: every reserve gives its card to it (a 2-card
+    for id in $(running_ids | grep '^reserve-'); do pause_job "$id"; done   # job would wait forever behind one)
+    return
+  fi
+  while [ "$have" -lt "$want" ] && [ "$ALLOW" -gt 0 ]; do
+    id="reserve-$(date +%m%d%H%M%S)"
+    launch_one "$id" reserve "$(git -C "$TOOLS" rev-parse HEAD)" reserve "" 1 "" "" || break
+    echo "$id" >> "$STATE"; touch "$ROOT/state_dirty"
+    have=$((have + 1)); ALLOW=$((ALLOW - 1))
+    post "[PAA DGX] holding a card for PAA: \`$id\` — $(printf '%s' "$OUT_TXT" | grep -m1 '^gpu') (keeps our $want; freed when PAA's next job needs it)."
+    sleep 5
+  done
 }
 
 resume_paused() {  # relaunch budget-paused jobs first, oldest first, while the budget allows
@@ -258,6 +276,7 @@ while true; do
     self_update
     budget
     resume_paused
+    LAUNCHED_GPU=0
     gpu_jobs=$(running_ids | while read -r i; do grep -q 'CUDA_VISIBLE_DEVICES=[0-9]' "$ROOT/jobs/$i/run.sh" && echo "$i"; done | grep -c . || true)
     while IFS=$'\x1f' read -r id step ref out after gpus resume args; do
       [ -n "$id" ] || continue
@@ -284,7 +303,7 @@ while true; do
       launch_one "$id" "$step" "$ref" "$out" "$after" "$gpus" "$resume" "$args"; rc=$?
       case "$rc" in
         0) echo "$id" >> "$STATE"; touch "$ROOT/state_dirty"
-           [ "$want" -gt 0 ] && { gpu_jobs=$((gpu_jobs + want)); ALLOW=$((ALLOW - want)); }
+           [ "$want" -gt 0 ] && { gpu_jobs=$((gpu_jobs + want)); ALLOW=$((ALLOW - want)); LAUNCHED_GPU=$((LAUNCHED_GPU + want)); }
            post "[PAA DGX] launched \`$id\` ($step${args:+ $args}) — $(printf '%s' "$OUT_TXT" | grep -m1 '^gpu') (${MODE%% (*})."
            sleep 5 ;;
         3|4) : ;;   # waiting for its input / for a free card: retry next cycle
@@ -292,6 +311,7 @@ while true; do
            post "[PAA DGX] could not launch \`$id\`:"$'\n```\n'"$OUT_TXT"$'\n```' ;;
       esac
     done < "$ROOT/queue.parsed"
+    keep_reserve
   else
     echo "$(date +%T) queue fetch failed (token/branch?)"
   fi

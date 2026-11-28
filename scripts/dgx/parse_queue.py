@@ -15,7 +15,7 @@ import sys
 
 import yaml
 
-STEPS = {"gen_data", "train", "eval", "export"}
+STEPS = {"gen_data", "train", "eval", "export", "reserve"}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
 REF = re.compile(r"^[0-9a-f]{7,40}$")
 TOKEN = re.compile(r"^[A-Za-z0-9_.:=,+/-]+$")

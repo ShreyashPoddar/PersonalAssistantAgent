@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$ID" ] && [ -n "$STEP" ] && [ -n "$REF" ] && [ -n "$OUT" ] || { echo "--id --step --ref --out are required"; exit 2; }
-case "$STEP" in gen_data|train|eval) : "${GPUS:=1}" ;; export) : "${GPUS:=0}" ;; *) echo "unknown step $STEP"; exit 2 ;; esac
+case "$STEP" in gen_data|train|eval|reserve) : "${GPUS:=1}" ;; export) : "${GPUS:=0}" ;; *) echo "unknown step $STEP"; exit 2 ;; esac
 [ -x "$ROOT/venv/bin/python" ] || { echo "no venv at $ROOT/venv - run setup_env.sh first"; exit 1; }
 grep -q '^HF_TOKEN=..' "$ROOT/secrets.env" 2>/dev/null || { echo "HF_TOKEN empty in $ROOT/secrets.env"; exit 1; }
 
@@ -39,6 +39,7 @@ if [ -n "$AFTER" ]; then
 fi
 case "$STEP" in
   gen_data) CMD=(python train/gen_data.py --out "$ART/$OUT") ;;
+  reserve)  CMD=(python train/reserve.py --out "$ART/$OUT") ;;   # only holds a card for PAA (owner: keep our 2)
   train)    [ -n "$IN" ] || { echo "train needs after: <gen_data out>"; exit 2; }
             CMD=(python train/train_sft.py --data "$IN" --out "$ART/$OUT"); [ "$RESUME" = 1 ] && CMD+=(--resume) ;;
   eval)     [ -n "$IN" ] || { echo "eval needs after: <train out>"; exit 2; }
