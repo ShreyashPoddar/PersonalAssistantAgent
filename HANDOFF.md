@@ -231,3 +231,6 @@ Updated 2026-10-18 ~17:00 IST · repo https://github.com/ShreyashPoddar/Personal
   queued → score + ship finished models (12B adapter: newest paa-lora.gguf under paa-llm\lora is what the launcher
   serves; rejected ones go to paa-llm\lora-rejected\) → laptop hub health/restart → build backlog → HANDOFF entry.
   Runs only while the Claude app is open (missed runs fire on next launch).
+- 2026-11-28 17:19 IST CLAIMED (hourly): fix failing hub test test_extract_forwards_prompt
+- 2026-11-28 17:20 IST CLAIMED (hourly): wa_reader robustness (typing/deleted previews, chats scrolled into view)
+- 2026-11-28 17:25 IST hourly: DGX data-v11 4096/12500 per shard (2 cards), lora-12b-v11b queued after it; nothing to score yet. Laptop hub ok (train-12b-v10 at scale 1). Fixed hub test that read the laptop's real ~/.paa-hub/llm_mode; wa_reader now ignores typing…/deleted previews, doesn't re-report a returning preview, and treats chats scrolled into view as old (17 hub tests pass; running hub picks it up on its next restart). Next: score lora-12b-v11b when done, then queue data-v12/lora-12b-v12.
