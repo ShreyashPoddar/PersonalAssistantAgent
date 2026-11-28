@@ -49,7 +49,7 @@ CATEGORIES = [
     ("the deadline or details of one of the owner's OPEN tasks change (4 baje tak bhi chalega, ab monday ko)", "received burst", 2),
     ("a bare acceptance like 'haan kar dunga' / 'ok' with nothing asked before it", "sent", 1),
     ("the owner accepts a request that is in the earlier lines (haan kar dunga, ok will do)", "sent burst", 2),
-    ("a task spread over several short lines: the work in one line, the day in another, the time in a third", "burst", 4),
+    ("a task spread over several short lines: the work in one line, the day in another, the time in a third", "burst", 6),
     ("a phone call where the owner agrees to do something or is asked to do something by a time", "call", 2),
     ("a phone call with only small talk / catching up, nothing to do", "call", 1),
     ("someone else's own plan or reminder that does not involve the owner (main kal jaa raha hu)", "received burst", 2),
@@ -67,7 +67,7 @@ CATEGORIES = [
      "lena, padh lo, tension mat lo, all the best, take care) - not a task", "received burst", 4),
     ("a request that uses the owner's own name or nickname in the message ('<owner> bhai notes bhej de', '@<owner> apni "
      "ppt bhejo', '<owner> tu kal form bhar dena'): a task for the owner, titled with the person who asked, never the "
-     "owner's name", "received burst", 4),
+     "owner's name", "received burst", 7),
     ("money in a flat / trip group: someone tells the owner to pay or add a split (a task) OR asks others to pay the owner "
      "back (not the owner's task)", "received burst", 3),
     ("someone asks the owner to add or put a split in the expense app ('daal dena split', 'split daal do', 'cook ka split "
@@ -77,7 +77,7 @@ CATEGORIES = [
     ("someone asks the owner to send information they need ('send me the details', 'subdomain ka naam bata', 'apna reg "
      "no bhej') - a task", "received burst", 3),
     ("a request that arrives in pieces: first only the need or problem ('UPI se payment nahi ho raha', 'form ka link aaya "
-     "hai'), then the ask or the push ('tu kar de please', 'jaldi kar expire ho jayega') - one task", "burst", 4),
+     "hai'), then the ask or the push ('tu kar de please', 'jaldi kar expire ho jayega') - one task", "burst", 7),
     ("the owner thinks aloud or asks a question about their own work ('case study aaj submit karu ya kal?', 'kya karna "
      "hai isme') - not a task", "sent burst", 2),
     ("someone sends a file, photo, link or receipt, or says they already sent something, with no ask - not a task", "received burst", 2),
@@ -255,10 +255,15 @@ def no_task_category(cat: str) -> bool:
 
 def sane(label: dict, prompt: str, n_open: int) -> str:
     """'' if the label is usable, else why not."""
+    owner_line = next((l for l in prompt.splitlines() if l.startswith("Owner: ")), "")
+    owners = {w.lower() for w in re.findall(r"[A-Za-z]{3,}", owner_line.split(", batch")[0][len("Owner: "):]) if w.lower() != "or"}
     for t in label.get("tasks") or []:
         title = str(t.get("title") or "")
         if not 2 <= len(title.split()) <= 9:
             return "title length"
+        # the owner's own name never goes in a title (v9/v10 on the real set: 2-5 such titles)
+        if owners & {w.lower().removesuffix("'s") for w in re.findall(r"[A-Za-z']+", title)}:
+            return "owner name in title"
         # names in a title must come from the input (the rule small models break most)
         for w in re.findall(r"\b[A-Z][a-z]{2,}\b", title)[1:]:
             if w.lower() not in prompt.lower() and w.lower() not in TITLE_WORDS:
