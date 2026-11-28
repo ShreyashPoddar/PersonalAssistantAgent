@@ -87,6 +87,16 @@ CATEGORIES = [
      "batati hu', 'I'll send it tonight', 'kal tak de dunga') - not the owner's task", "received burst", 4),
     ("someone asks the owner whether they should do something of their own ('should I upload it?', 'kya mai bhi "
      "apply karu?') - not the owner's task", "received", 2),
+    # v12: the trained 12B (v10) missed 6/18 plain requests on the real set (no task at all) and named the owner when
+    # a group asked others to pay the owner
+    ("a request asked as a polite question or a 'can you' ('notes bhej sakta hai?', 'ek kaam karega?', 'can you check "
+     "my code?', 'bhai thoda form bhar dega kya') - a task for the owner, not just a question", "received burst", 5),
+    ("someone only states what they need from the owner ('mujhe tera assignment chahiye', 'I need the slides', 'ek pen "
+     "chahiye kal', 'charger chahiye tha') - a task for the owner", "received burst", 4),
+    ("a request with no name or @mention in a one-to-one chat, very short and plain ('bhej de', 'pdf send kar', 'call "
+     "me', 'check kar le', 'yaad se le aana') - a task", "received burst", 4),
+    ("someone in a group asks the others to pay the owner or return the owner's money ('sab log <owner> ko 200 bhej do', "
+     "'<owner> ke paise de dena', 'pay <owner> for the cab') - not the owner's task", "received burst", 3),
     ("a question to the owner that only asks for information or opinion ('kahan busy ho?', 'pehle kuch karna padta hai "
      "kya?', 'game ke liye aa raha?') - not a task", "received burst", 3),
 ]
@@ -130,6 +140,10 @@ like a person would and list the real to-dos THE OWNER must do. Reply with ONLY 
 
 Rules:
 - A task = a promise the owner makes ("kal bhej dunga") or a request made to the owner. In groups only if it names the owner.
+- Requests are often short, polite questions or a stated need: "bhej sakta hai?", "can you check it?", "mujhe notes
+  chahiye", "charger chahiye tha", "bhej de" — each is a task (in a one-to-one chat it is always addressed to the owner).
+- Someone asking OTHERS to pay the owner or return the owner's money ("sab log <owner> ko 200 bhej do") is not the
+  owner's task.
 - Not a task: suggestions ("call pe baat karte hai"), jokes, ads, announcements for everyone, someone else's plan, things already done.
 - Not a task: someone ELSE promising to do something themselves. "main/mai … kar dunga / bhej deta hu / batati hu",
   "I'll draft it", "kal tak de dunga" in a message the owner RECEIVED is the sender's own promise, not the owner's
