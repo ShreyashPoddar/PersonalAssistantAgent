@@ -29,7 +29,9 @@ sealed class Action(val tier: RiskTier) {
     data class PlaceCall(val number: String, val contactName: String) : Action(RiskTier.OUTWARD) {
         override fun summary() = "Call $contactName"
     }
-    data class PlaceOrder(val app: String, val cartSummary: String, val amountPaise: Long) : Action(RiskTier.MONEY) {
+    /** [upiApp]: package of the UPI app to open for the owner (null = the merchant app's own payment step). */
+    data class PlaceOrder(val app: String, val cartSummary: String, val amountPaise: Long, val upiApp: String? = null) :
+        Action(RiskTier.MONEY) {
         override fun summary() = "Order on $app: $cartSummary — ₹${rupees(amountPaise)}"
     }
     data class Sos(val reason: String) : Action(RiskTier.SOS) { override fun summary() = "SOS" }

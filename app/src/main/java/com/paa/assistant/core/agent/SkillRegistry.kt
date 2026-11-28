@@ -15,7 +15,8 @@ class SkillRegistry @Inject constructor(
     private val openApp: com.paa.assistant.core.skills.OpenAppSkill,
     private val sos: com.paa.assistant.core.skills.SosSkill,
     private val sms: com.paa.assistant.core.skills.SmsSkill,
-    private val email: com.paa.assistant.core.skills.EmailSkill
+    private val email: com.paa.assistant.core.skills.EmailSkill,
+    private val payment: com.paa.assistant.core.skills.PaymentSkill
 ) {
     @Suppress("UNCHECKED_CAST")
     fun forAction(a: Action): Skill<Action>? = when (a) {
@@ -26,6 +27,7 @@ class SkillRegistry @Inject constructor(
         is Action.Sos -> sos
         is Action.SendSms -> sms
         is Action.SendEmail -> email
+        is Action.PlaceOrder -> payment
         else -> null
     } as Skill<Action>?
 }

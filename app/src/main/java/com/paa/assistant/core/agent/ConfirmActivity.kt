@@ -57,6 +57,10 @@ class ConfirmActivity : FragmentActivity() {
                             Text(title(p.action.tier), style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(12.dp))
                             Text(p.action.summary(), style = MaterialTheme.typography.bodyLarge)
+                            if (p.action.tier == RiskTier.MONEY) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(com.paa.assistant.core.money.PaymentHandoff.PIN_NOTE, style = MaterialTheme.typography.bodyMedium)
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text(sourceText(p.source), style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(20.dp))
