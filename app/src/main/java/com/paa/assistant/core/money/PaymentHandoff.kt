@@ -31,6 +31,18 @@ object PaymentHandoff {
     /** Max single order PAA will hand off (₹1,00,000); bigger amounts are almost surely a parse error. */
     const val MAX_PAISE = 1_00_000_00L
 
+    /** P3-T7 per-order cap (owner can raise it): above this PAA warns and asks for a second, explicit confirm. */
+    const val DEFAULT_CAP_PAISE = 2_000_00L
+
+    /** True when [amountPaise] is above the owner's cap (a cap <= 0 falls back to the default, never "no cap"). */
+    fun overCap(amountPaise: Long, capPaise: Long): Boolean =
+        amountPaise > (if (capPaise > 0) capPaise else DEFAULT_CAP_PAISE)
+
+    /** Warning on the confirm sheet for an order above the cap; null when under it. */
+    fun capWarning(amountPaise: Long, capPaise: Long): String? =
+        if (!overCap(amountPaise, capPaise)) null
+        else "${rupees(amountPaise)} is above your ${rupees(if (capPaise > 0) capPaise else DEFAULT_CAP_PAISE)} limit. Check the amount, then confirm again."
+
     fun rupees(paise: Long): String {
         val r = paise / 100
         val p = paise % 100

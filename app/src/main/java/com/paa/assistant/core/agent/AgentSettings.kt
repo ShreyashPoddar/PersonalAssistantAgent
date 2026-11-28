@@ -26,5 +26,10 @@ class AgentSettings @Inject constructor(@ApplicationContext private val ctx: Con
         get() = prefs.getBoolean("trust_all_contacts", false)
         set(v) = prefs.edit().putBoolean("trust_all_contacts", v).apply()
 
+    /** Orders above this (paise) get a warning and a second confirm before the fingerprint (P3-T7). */
+    var orderCapPaise: Long
+        get() = prefs.getLong("order_cap_paise", com.paa.assistant.core.money.PaymentHandoff.DEFAULT_CAP_PAISE)
+        set(v) = prefs.edit().putLong("order_cap_paise", v).apply()
+
     fun voiceLockOn(): Boolean = VoicePrint.isOn(ctx)
 }

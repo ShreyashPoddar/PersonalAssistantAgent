@@ -35,6 +35,7 @@ class ConfirmActivity : FragmentActivity() {
 
     @Inject lateinit var broker: ConfirmBroker
     @Inject lateinit var gate: BiometricGate
+    @Inject lateinit var settings: AgentSettings
 
     private var requestId: String? = null
     private var decided = false
@@ -49,6 +50,11 @@ class ConfirmActivity : FragmentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = decide(false, null)
         })
+        // Above the owner's per-order cap: warn, and the first Confirm only acknowledges (P3-T7).
+        val capWarning = (p.action as? Action.PlaceOrder)?.let {
+            com.paa.assistant.core.money.PaymentHandoff.capWarning(it.amountPaise, settings.orderCapPaise)
+        }
+        val capAcknowledged = androidx.compose.runtime.mutableStateOf(false)
         setContent {
             PAATheme {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -61,13 +67,20 @@ class ConfirmActivity : FragmentActivity() {
                                 Spacer(Modifier.height(8.dp))
                                 Text(com.paa.assistant.core.money.PaymentHandoff.PIN_NOTE, style = MaterialTheme.typography.bodyMedium)
                             }
+                            capWarning?.let {
+                                Spacer(Modifier.height(8.dp))
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text(sourceText(p.source), style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(20.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
                                 OutlinedButton(onClick = { decide(false, null) }) { Text("Cancel") }
-                                Button(onClick = { if (p.biometric) askFingerprint(id, p) else decide(true, null) }) {
-                                    Text("Confirm")
+                                Button(onClick = {
+                                    if (capWarning != null && !capAcknowledged.value) capAcknowledged.value = true
+                                    else if (p.biometric) askFingerprint(id, p) else decide(true, null)
+                                }) {
+                                    Text(if (capWarning != null && capAcknowledged.value) "Yes, pay" else "Confirm")
                                 }
                             }
                         }

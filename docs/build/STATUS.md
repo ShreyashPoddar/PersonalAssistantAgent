@@ -50,7 +50,7 @@ task's commit. "Owner" tasks need the phone owner; "Agent" tasks the AI model do
 - [ ] P3-T4 Shopping flows (Blinkit→Zepto→Amazon→Flipkart→Myntra)
 - [~] P3-T5 Travel compare — voice "bus/train/flight from X to Y on <day>" → web fares (route+date only) or search page; booking by owner; phone check pending
 - [ ] P3-T6 Reorder memory
-- [ ] P3-T7 Order safety review
+- [~] P3-T7 Order safety review — per-order cap (default ₹2,000, AgentSettings.orderCapPaise; 0 falls back to the default): above it the confirm sheet warns and the first Confirm only acknowledges, then "Yes, pay" → fingerprint (2 tests). OrderSafetyTest + cart read-back pending (needs T2 flow engine)
 - [ ] Phase 3 exit check
 
 ## Phase 4 — calls + hub (`P4_calls_hub.md`)

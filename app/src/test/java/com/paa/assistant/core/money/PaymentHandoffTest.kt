@@ -109,4 +109,24 @@ class PaymentHandoffTest {
     fun verdictForOrdersIsAlwaysBiometric() {
         assertEquals(Verdict.Confirm(biometric = true), Guard.decide(order, CommandSource.OWNER_VOICE, true, false, false, true, null, trustAll = true))
     }
+    @Test
+    fun capWarnsOnlyAboveTheLimit() {
+        val cap = PaymentHandoff.DEFAULT_CAP_PAISE
+        assertEquals(null, PaymentHandoff.capWarning(cap, cap))
+        assertFalse(PaymentHandoff.overCap(34950, cap))
+        assertTrue(PaymentHandoff.overCap(cap + 1, cap))
+        assertEquals(
+            "₹2,500 is above your ₹2,000 limit. Check the amount, then confirm again.",
+            PaymentHandoff.capWarning(2_500_00, cap)
+        )
+    }
+
+    @Test
+    fun capCanBeRaisedButNeverTurnedOff() {
+        assertFalse(PaymentHandoff.overCap(4_000_00, 5_000_00))
+        assertTrue(PaymentHandoff.overCap(5_000_01, 5_000_00))
+        // 0 / negative falls back to the default instead of meaning "no cap".
+        assertTrue(PaymentHandoff.overCap(2_000_01, 0))
+        assertTrue(PaymentHandoff.overCap(2_000_01, -1))
+    }
 }
