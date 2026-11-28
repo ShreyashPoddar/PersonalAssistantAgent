@@ -21,8 +21,34 @@ class LocalCommandExecutor @Inject constructor(
     private val repository: TaskRepository,
     private val geofenceManager: GeofenceManager,
     private val savedPlaces: SavedPlaces,
-    private val localLlm: LocalLlm
+    private val localLlm: LocalLlm,
+    private val savedOrders: com.paa.assistant.data.db.SavedOrderDao,
+    private val orders: com.paa.assistant.core.money.OrderConfirmationTracker,
+    private val executor: javax.inject.Provider<com.paa.assistant.core.agent.Executor>,
 ) {
+    /** "Save this as my usual breakfast" → remembers the last order PAA handed off (within 6 h). */
+    suspend fun saveUsualOrder(label: String?): String {
+        val order = orders.lastHandedOff()
+            ?: return "I don't have a recent order to save. Place the order with me first, then say \"save this as my usual …\"."
+        val saved = com.paa.assistant.core.money.SavedOrders.save(order, label ?: "", System.currentTimeMillis())
+            ?: return "I can't save that order (no amount or items)."
+        savedOrders.upsert(com.paa.assistant.data.models.SavedOrderEntity.of(saved))
+        return "Saved as your usual ${saved.label}. Say \"order my usual ${saved.label}\" next time."
+    }
+
+    /** "Order my usual breakfast" → a fresh PlaceOrder through the Executor (Guard + fingerprint on the amount). */
+    suspend fun reorderUsual(
+        label: String?, source: com.paa.assistant.core.agent.CommandSource, voiceVerified: Boolean = false
+    ): String {
+        val all = savedOrders.all().map { it.toSaved() }
+        val wanted = label ?: com.paa.assistant.core.money.SavedOrders.DEFAULT_LABEL
+        val s = com.paa.assistant.core.money.SavedOrders.find(all, wanted)
+            ?: return com.paa.assistant.core.money.SavedOrders.notFound(all, wanted)
+        val r = executor.get().submit(com.paa.assistant.core.money.SavedOrders.rebuild(s), source, voiceVerified = voiceVerified)
+        if (r.ok) savedOrders.markUsed(s.label)
+        return r.message
+    }
+
     private val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault())
     private val dayTimeFmt = SimpleDateFormat("EEE h:mm a", Locale.getDefault())
 

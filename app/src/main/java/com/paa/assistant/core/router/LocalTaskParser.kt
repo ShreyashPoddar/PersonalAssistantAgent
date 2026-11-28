@@ -46,6 +46,8 @@ enum class LocalIntent {
     SAVE_PLACE,  // "save this location as home"
     RESCHEDULE_TASK,  // "change that reminder to 10 pm", "no no, make it 12" → moves an existing task
     SEND_MESSAGE,  // "Riya ko bol do ki main late hu", "message Riya that I'm late" → WhatsApp after confirmation
+    SAVE_USUAL_ORDER,  // "save this as my usual breakfast" → remembers the last handed-off order (taskTitle = label)
+    REORDER_USUAL,  // "order my usual breakfast" → fresh PlaceOrder through Guard + fingerprint (taskTitle = label)
     UNKNOWN  // triggers cloud escalation
 }
 
@@ -139,6 +141,13 @@ class LocalTaskParser @Inject constructor() {
 
     fun parse(input: String): LocalParseResult {
         val trimmed = input.trim()
+        // Money commands first ("save this as my usual …" would otherwise look like "save this place as …").
+        com.paa.assistant.core.money.SavedOrders.parseSave(trimmed)?.let {
+            return LocalParseResult(LocalIntent.SAVE_USUAL_ORDER, taskTitle = it, confidence = 1.0f, rawInput = trimmed)
+        }
+        com.paa.assistant.core.money.SavedOrders.parseReorder(trimmed)?.let {
+            return LocalParseResult(LocalIntent.REORDER_USUAL, taskTitle = it, confidence = 1.0f, rawInput = trimmed)
+        }
         parseSendMessage(trimmed)?.let { return it }
         val normalized = normalizeInput(trimmed)
 

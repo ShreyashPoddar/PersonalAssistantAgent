@@ -456,6 +456,8 @@ class MainViewModel @Inject constructor(
                 }
             }
             LocalIntent.SAVE_PLACE -> localExecutor.savePlace(result.locationName)
+            LocalIntent.SAVE_USUAL_ORDER -> localExecutor.saveUsualOrder(result.taskTitle)
+            LocalIntent.REORDER_USUAL -> localExecutor.reorderUsual(result.taskTitle, com.paa.assistant.core.agent.CommandSource.OWNER_UI)
             LocalIntent.SEND_MESSAGE -> "Say it to the voice assistant (🎙️) — it shows the message so you can confirm before it's sent."
             LocalIntent.UNKNOWN -> "I didn't recognize that command."
         }

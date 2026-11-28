@@ -468,6 +468,8 @@ class VoiceOverlayViewModel @Inject constructor(
                 }
             }
             LocalIntent.SAVE_PLACE -> localExecutor.savePlace(result.locationName)
+            LocalIntent.SAVE_USUAL_ORDER -> localExecutor.saveUsualOrder(result.taskTitle)
+            LocalIntent.REORDER_USUAL -> localExecutor.reorderUsual(result.taskTitle, commandSource, commandVoiceVerified)
             LocalIntent.SEND_MESSAGE -> if (result.taskTitle == null) prepareBareMessage(result.recipient ?: "")
                 else prepareMessage(result.recipient ?: "", result.taskTitle)
             LocalIntent.UNKNOWN -> "I didn't quite catch that. Could you rephrase?"

@@ -93,7 +93,18 @@ class OrderConfirmationTracker(private val audit: AuditDao, private val now: () 
 
     @Volatile private var pending: OrderConfirmation.Pending? = null
 
-    fun expect(order: Action.PlaceOrder) { pending = OrderConfirmation.pendingFor(order, now()) }
+    @Volatile private var last: Pair<Action.PlaceOrder, Long>? = null
+
+    fun expect(order: Action.PlaceOrder) {
+        pending = OrderConfirmation.pendingFor(order, now())
+        last = order to now()
+    }
+
+    /** The last order PAA handed off, if within [maxAgeMs] — what "save this as my usual X" means. */
+    fun lastHandedOff(maxAgeMs: Long = LAST_ORDER_MS): Action.PlaceOrder? =
+        last?.takeIf { now() - it.second <= maxAgeMs }?.first
+
+    companion object { const val LAST_ORDER_MS = 6 * 60 * 60 * 1000L }
 
     /** True when [pkg] might confirm the waiting order (cheap check before reading the notification). */
     fun watching(pkg: String): Boolean {

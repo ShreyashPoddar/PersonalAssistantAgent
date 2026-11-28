@@ -92,4 +92,16 @@ class OrderConfirmationTest {
         now += OrderConfirmation.WINDOW_MS + 1
         assertFalse(tracker.watching("com.phonepe.app"))
     }
+
+    @Test
+    fun lastHandedOffIsWhatSaveUsualSaves() {
+        var now = t0
+        val tracker = OrderConfirmationTracker(FakeAudit()) { now }
+        org.junit.Assert.assertNull(tracker.lastHandedOff())
+        tracker.expect(order)
+        now += OrderConfirmation.WINDOW_MS + 1          // confirmation window over, still saveable
+        org.junit.Assert.assertEquals(order, tracker.lastHandedOff())
+        now = t0 + OrderConfirmationTracker.LAST_ORDER_MS + 1
+        org.junit.Assert.assertNull(tracker.lastHandedOff())
+    }
 }
