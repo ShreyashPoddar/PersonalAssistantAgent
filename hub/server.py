@@ -107,6 +107,18 @@ def owner_from_prompt(prompt: str) -> tuple:
     return "the owner", 2028
 
 
+MODE_FILE = Path.home() / ".paa-hub" / "llm_mode"
+
+
+def current_mode(default: str) -> str:
+    """~/.paa-hub/llm_mode ("rules" | "student") switches the prompt without restarting the hub (a new adapter)."""
+    try:
+        m = MODE_FILE.read_text().strip()
+        return m if m in ("rules", "student") else default
+    except OSError:
+        return default
+
+
 def llm_messages(prompt: str, mode: str) -> list:
     if mode == "student":
         return [{"role": "user", "content": prompt}]
@@ -170,8 +182,9 @@ def make_handler(token: str, started: float, llm: str | None = None, llm_mode: s
                     return self._send(400, {"error": "bad json"})
                 if not prompt:
                     return self._send(400, {"error": "no prompt"})
+                mode = current_mode(llm_mode)
                 try:
-                    return self._send(200, {"output": ask(llm, llm_mode, prompt), "model": llm_mode})
+                    return self._send(200, {"output": ask(llm, mode, prompt), "model": mode})
                 except Exception as e:   # the model server is down / slow: the phone falls back to its own model
                     return self._send(502, {"error": f"model: {type(e).__name__}"})
             self._send(404, {"error": "not found"})

@@ -73,11 +73,11 @@ def server_messages(prompt: str, mode: str) -> list:
     return [{"role": "system", "content": RULES.format(names=names, year=GRAD_YEAR)}, {"role": "user", "content": prompt + "\nJSON:"}]
 
 
-def ask_server(url: str, messages: list) -> tuple:
+def ask_server(url: str, messages: list, lora: float | None = None) -> tuple:
     """One chat completion from a local llama.cpp server, output forced to the verdict JSON schema."""
     import time
     import urllib.request
-    body = json.dumps({"messages": messages, "temperature": 0, "max_tokens": 500, "chat_template_kwargs": {"enable_thinking": False},
+    body = json.dumps({"messages": messages, "temperature": 0, "max_tokens": 500, "chat_template_kwargs": {"enable_thinking": False}, **({"lora": [{"id": 0, "scale": lora}]} if lora is not None else {}),
                        "response_format": {"type": "json_schema", "json_schema": {"name": "verdict", "schema": VERDICT_SCHEMA}}}).encode()
     t0 = time.time()
     req = urllib.request.Request(url.rstrip("/") + "/v1/chat/completions", body, {"Content-Type": "application/json"})
@@ -89,7 +89,7 @@ def ask_server(url: str, messages: list) -> tuple:
 def run_server(a, cases, prompts, out: Path):
     rows, secs = [], []
     for c, p in zip(cases, prompts):
-        o, dt = ask_server(a.server, server_messages(p, a.prompt))
+        o, dt = ask_server(a.server, server_messages(p, a.prompt), a.lora)
         secs.append(dt)
         rows.append({**score(c, first_json(o)), "id": c["id"], "cat": c["cat"], "output": o, "seconds": round(dt, 2)})
     summary = summarize(rows)
@@ -108,6 +108,7 @@ def main():
     ap.add_argument("--server", help="a llama.cpp server URL instead of --model (laptop only: localhost)")
     ap.add_argument("--name", default="server")
     ap.add_argument("--prompt", choices=["rules", "student"], default="rules")
+    ap.add_argument("--lora", type=float, help="per-request LoRA scale (server started with --lora)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     if a.server:
